@@ -45,9 +45,12 @@ from tkinter.filedialog import askopenfilename
 import csv, math
 import pandas as pd
 import numpy as np
+import napari 
+import tifffile as tif
 
 # For plotting
 import matplotlib.pyplot as plt 
+from collections import defaultdict
 
 
 
@@ -59,18 +62,44 @@ import matplotlib.pyplot as plt
 # Primarily for the computational section, though clustering and mapping sections also use some of these functions)
 
 # Function that gets user inputs
+
+print('running')
 def getUserInput():
     xyz_fileNames = {}
     tk.Tk().withdraw()
-    number_of_timepoints = simpledialog.askinteger(title="Timepoints", prompt="Enter the number of imaging sessions (i.e. Enter 6 for six imaging sessions). Note that Image1 should equal Timepoint 1.")
-    animal_ID = simpledialog.askstring(title="Animal ID", prompt="Enter animal ID? (i.e. SOM022)")
-    branch_ID = simpledialog.askstring(title="Branch ID", prompt="What branch do you want to analyze? (i.e. Enter 2 for branch/path ID 2.)")
-    marker_filename = askopenfilename(title="Select the CombinedResults.csv for markers on branch " + str(branch_ID))
-    fiducial_fileName = askopenfilename(title="Select the CombinedResults.csv for the fiducials on branch " + str(branch_ID))
-    for timepoint in range(number_of_timepoints):
-        xyz_fileNames["Timepoint " + str(timepoint+1)] = askopenfilename(title="Select the .csv file with the branch(es) xyz coordinates for time point " + str(timepoint+1))
+    '''
+    IMPORTANT! -- GUI code is commented out here and replaced with paths 
+    for ease of debugging - Uncomment this and comment out pathname code 
+    for different paths. 
+    '''
+    # number_of_timepoints = simpledialog.askinteger(title="Timepoints", prompt="Enter the number of imaging sessions (i.e. Enter 6 for six imaging sessions). Note that Image1 should equal Timepoint 1.")
+    # animal_ID = simpledialog.askstring(title="Animal ID", prompt="Enter animal ID? (i.e. SOM022)")
+    # branch_ID = simpledialog.askstring(title="Branch ID", prompt="What branch do you want to analyze? (i.e. Enter 2 for branch/path ID 2.)")
+    # marker_filename = askopenfilename(title="Select the CombinedResults.csv for markers on branch " + str(branch_ID))
+    # fiducial_fileName = askopenfilename(title="Select the CombinedResults.csv for the fiducials on branch " + str(branch_ID))
+
+    number_of_timepoints = 6
+    animal_ID = 'SOM022'
+    branch_ID = '2' #Not really checked
+    marker_filename = '/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/PunctaScoring/b2/SynapseMarkers/beforeAlignment/CombinedResults.csv'
+    fiducial_fileName = '/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/PunctaScoring/b2/Fiducials/CombinedResults.csv'
+
+    xyz_fileNames['Timepoint 1'] = '/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/SNT_Tracing/Image1/SOM022Image1FullTrace_withbrancheslabeled_xyzCoordinates.csv'
+    xyz_fileNames['Timepoint 2'] = '/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/SNT_Tracing/Image2/SOM022_Image2_fulltrace_withbrancheslabeled_xyzCoordinates.csv'
+    xyz_fileNames['Timepoint 3'] = '/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/SNT_Tracing/Image3/SOM022Image3_fulltrace_withbrancheslabeled_xyzCoordinates.csv'
+    xyz_fileNames['Timepoint 4'] = '/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/SNT_Tracing/Image4/SOM022Image4_fulltrace_withbrancheslabeled_xyzCoordinates.csv'
+    xyz_fileNames['Timepoint 5'] = '/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/SNT_Tracing/Image5/SOM022Image5_fulltrace_withbrancheslabeled_xyzCoordinates.csv'
+    xyz_fileNames['Timepoint 6'] = '/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/SNT_Tracing/Image6/SOM022Image6fulltrace_withbrancheslabeled_xyzCoordinates.csv'
+    # for timepoint in range(number_of_timepoints):
+    #     xyz_fileNames["Timepoint " + str(timepoint+1)] = askopenfilename(title="Select the .csv file with the branch(es) xyz coordinates for time point " + str(timepoint+1))
+    # for timepoint in range(number_of_timepoints):
+    #     xyz_fileNames["Timepoint " + str(timepoint+1)] = askopenfilename(title="Select the .csv file with the branch(es) xyz coordinates for time point " + str(timepoint+1))
     export_csv_directory = filedialog.askdirectory(title="Choose the folder to save the exported .csv ")
     return number_of_timepoints, branch_ID, xyz_fileNames, marker_filename, export_csv_directory, fiducial_fileName, animal_ID
+
+
+
+
 
 # Function that takes in the branch coordinate .csv files and returns the xyz coordinates for the specified branch
 def getBranchCoordinates(xyz_fileNames, branch_ID):
@@ -101,6 +130,7 @@ def getBranchCoordinates(xyz_fileNames, branch_ID):
         raw_branch_coordinates.append(timepoint_list)
         print("Successfully saved " + str(len(timepoint_list)) + " branch coordinates in Timepoint " + str(timepoint+1))
     return raw_branch_coordinates
+
 
 # Function that reads the markers CombinedResults.csv and returns the marker type and marker coordinates, where Z is imageJ Z and not objectJ Z, across all imaging sessions.
 def getMarkersInfo(marker_fileName, number_of_timepoints):
@@ -239,13 +269,16 @@ def dist_along_branch(branch, start, end):
         distances += distance
     return distances
 
+'''
+Commented out because feels unnecessary/redundant
+'''
 # Function that gets the segment scaling factor
-def get_scale_factor(distances):
-    try:
-        return distances[0]/distances[1]
-    except ZeroDivisionError: # if Point N is on the same spot as Point N+1, return 0
-        print("Zero division error: the distance between two points are 0 either because different indexes have the same xy coordinates\nStopping code. Please fix fiducials or branch tracing.")
-        sys.exit("\nZERO DIVISION ERROR: the distance between two points are 0 either because different indexes have the same xy coordinates\nStopping code. Please fix fiducials or branch tracing.")
+# def get_scale_factor(distances):
+#     try:
+#         return distances[0]/distances[1]
+#     except ZeroDivisionError: # if Point N is on the same spot as Point N+1, return 0
+#         print("Zero division error: the distance between two points are 0 either because different indexes have the same xy coordinates\nStopping code. Please fix fiducials or branch tracing.")
+#         sys.exit("\nZERO DIVISION ERROR: the distance between two points are 0 either because different indexes have the same xy coordinates\nStopping code. Please fix fiducials or branch tracing.")
 
 # Given list of branch indexes, return list of branch coordinates
 def index_to_branch(normalized_branch_coordinates, indexes):
@@ -528,13 +561,29 @@ across timepoints by segment at timepoint. Each sublist represents
 scale factors at timepoint 
 
 '''
+
+print(segment_distance_allTimepoints)
 scale_factor_allTimepoints = []
+
 for segments_in_timepoint in segment_distance_allTimepoints:
     scale_factor = []
+    print(f"Processing timepoint with segments: {segments_in_timepoint}")
     maxDist_and_segmentDist = [*zip(max_dist_perSegment, segments_in_timepoint)]
     for segment_distances in maxDist_and_segmentDist:
-        scale_factor.append(get_scale_factor(segment_distances))
-    scale_factor_allTimepoints.append(scale_factor)
+        if segment_distances[1] ==0:
+            scale_factor_current = 0.01
+            # The issue in b2 was that one of the branches started at 
+            # a point that was basically 0 because it was the first one. 
+        else:
+            scale_factor_current = segment_distances[0]/segment_distances[1]
+            # print(f"scale_factor_current: {scale_factor_current}")
+        scale_factor_allTimepoints.append(scale_factor)
+        # except ZeroDivisionError:
+        #     print(f"segment_distances: {segment_distances}")
+        #     print("ERROR: There is a problem with the scale factor calculation")
+        #     sys.exit("ZERO DIVISION ERROR...STOPPING CODE")
+        scale_factor.append(scale_factor_current)
+
 print("scale_factor_allTimepoints =", scale_factor_allTimepoints, "\n")
 
 '''
@@ -544,14 +593,14 @@ Create a list of lists where each list is a timepoint. Scale by scalefactors
 from previous computation. (Essentially scale so that every single segment
 is the max length) -> Amy: why is this necessary did we not just create timepoints# 
 duplicates of the same list with the maximum of each one 
-'''
+'''            #Boolean Stating g + (f from goal to start) - (h to start) is not as good as our best
 segment_length_scaled_allTimepoints = []
 for i in range(len(segment_distance_allTimepoints)):
     scaled_segment = []
     for eachDistance_and_Scale in (zip(segment_distance_allTimepoints[i], scale_factor_allTimepoints[i])):
         scaled_segment.append(eachDistance_and_Scale[0]*eachDistance_and_Scale[1])
     segment_length_scaled_allTimepoints.append(scaled_segment)
-print("segment_length_scaled_allTimepoints =", segment_length_scaled_allTimepoints, "\n")
+
 
 '''
 cumulative_distance_unScaled_allTimepoints ->
@@ -682,8 +731,14 @@ def k_means(centroids, distance_data):
     '''
     Input: 
     
-    centroid: 
-    distance_data: 
+        centroids: Initial centroids(Used when looped through all
+        the different possibilities for initial centroids) 
+        distance_data: List of lists format of cumulative data
+
+    Output:
+        current_centroids(list): new centroids after everything converges
+        cluster_map(dictionary): new centroids dictionary of form in 
+                                closest_map 
     
     '''
     def reassign_centroids(cluster_map):
@@ -697,11 +752,24 @@ def k_means(centroids, distance_data):
                                         markers that have been mapped to this point
         Output: new centroids(list): Average cumulative distances of 
                                     markers mapped to each centroid
+
+        Algorithm
+        ---------
+            We make an idx_to_centroid dictionary that has
+            keys: cluster_idx
+            values: average cumulative distance for each marker mapped to said
+                    cluster_idx.
+            
+            We then output each of the average cumulative distances 
+            in list format [basically just a list of the values]
         
         '''
         idx_to_centroid = {}
         for cluster_idx, tuple_list in cluster_map.items():
             idx_to_centroid[cluster_idx] = round(sum([tuple[1] for tuple in tuple_list])/len(tuple_list), 2)
+
+        #Amy: Could change to just output idx_to_centroid.values or just directly output in the for loop/make list there. 
+        
         new_centroids = []
         for i in range(len(cluster_map)):
             new_centroids.append(idx_to_centroid[i])
@@ -714,6 +782,12 @@ def k_means(centroids, distance_data):
         '''
         cluster_to_data = {}
         for time_point in range(len(distance_data)):
+            '''
+            We loop through each timepoint
+            time_point_list is the distance data for each timepoint
+            We loop through each point in time_point_list and find
+            the closest centroid index to it
+            '''
             time_point_list = distance_data[time_point]
             for i in range(len(time_point_list)):
                 #Amy: Find the closest centroid within the current centroids to the specific marker
@@ -723,9 +797,9 @@ def k_means(centroids, distance_data):
                 Create a dictionary where keys are centroids that are closest to current
                 timepoint element. Values are lists of tuples containing
 
-                0: (closest_idx(closest centroid index), 
+                0: closest_idx(closest centroid index), 
                 1: cumulative distance value for current marker, 
-                2: index of current marker in final_marker_distance)
+                2: index of current marker in final_marker_distance
 
                 Each tuple essentially holds information for each marker
                 that has been mapped to this centroid
@@ -801,7 +875,8 @@ def split_if_error(centroids, data_map):
 
     def compute_new_centroids(worst_cluster, worst_position):
         """
-        All clusters are left untouched except for the cluster that will be split off. The worst position will become a new centroid, and the original cluster's centroid will shift because one point is removed.
+        All clusters are left untouched except for the cluster that will be split off. 
+        The worst position will become a new centroid, and the original cluster's centroid will shift because one point is removed.
         """
         new_centroids = [worst_position]
         for i in range(len(centroids)):
@@ -827,18 +902,25 @@ def calculateClusters(distance_data, filename):
         timepoint list of list form. This is calculated separately for 
         spines and shaft spines.
     Output:
-    
+        cluster_mapping(prettyprint):
+
     
     '''
     def getClustersGivenInitialSeeds(centroids):
         '''
         Input: 
             centroids -> We start originally with an individual timepoint cumulative. 
-
+        
+        Output:
+            (centroids, data_map, stdev) -> 
             
 
         '''
         def get_stdev(data_map):
+            '''
+            data_map: (Result of k_means)
+
+            '''
             stdev_allClusters = []
             for i in range(len(data_map)):
                 tuple_list = data_map[i]
@@ -875,6 +957,28 @@ def calculateClusters(distance_data, filename):
 
 # PRINTING AND SAVING AS .CSV
 def pretty_print(centroids, data_map, filename):
+    '''
+    Input
+    -----
+        centroids: 
+        data_map: 
+        filename: 
+
+    Output 
+    -----
+    clusters_mapping: List of tuples in which each
+        element is of the format (timepoint, point_idx, distance)
+
+
+    Called
+    ------
+    calculateClusters Calls this to output cluster_mapping
+
+
+    Function
+    ------
+
+    '''
     sorted_cluster_indices = np.argsort(centroids)
     grouping_list = []
     clusters_mapping = []
@@ -885,6 +989,11 @@ def pretty_print(centroids, data_map, filename):
         pretty_objects = [(tp, point_idx, position) for _, position, tp, point_idx in tuple_list]
         for j in range(number_of_timepoints):
             if j not in [tp for tp, _, _ in pretty_objects]:
+                '''
+                For all of timepoints within a certain group, we add an element that is
+                NA if it does not exist
+                within that timepoint i.e. "Nothing" marker
+                '''
                 pretty_objects.append((j, 'NA', 'NA'))
                 pretty_objects.sort()
         # print(pretty_objects)
@@ -904,6 +1013,7 @@ def pretty_print(centroids, data_map, filename):
     return clusters_mapping
 
 shaft_distances, spine_distances = separateShaftfromSpine()
+print(f"spine_distance PRINT {spine_distances}")
 
 if not any(shaft_distances) == False:
     shaft_grouping_list = calculateClusters(shaft_distances, "inhibitoryshaft")
@@ -946,6 +1056,21 @@ def findCoordinate_givenDistance(imagenum, unscaledDist):
     raise Exception("The unscaled distance is longer than the branch")
 
 def avg_Translation(cluster):
+    '''
+    Input
+    -------
+    cluster: Called from cluster_csv 
+            Actual format can be found as [One of the clusters from 
+            the clusterlist outputted by calculateClusters]
+        Note that this function is meant to only be used on the spine synapses 
+    Output
+    -------
+    (xTranslation, yTranslation): Goes through all spinePoints which
+        exist and calculates the distance from the branch point it was mapped to
+        (separately with x and y)
+        Finally calculates the mean of these translations 
+
+    '''
     spinePoints = [point for point in cluster if point[1] != 'NA']
     xtrans_list = []
     ytrans_list = []
@@ -960,6 +1085,21 @@ def avg_Translation(cluster):
     return round(avg_Xtranslation), round(avg_Ytranslation)
 
 def cluster_csv(clusterList, markerType, emptyMarker, markerStart, translation):
+    '''
+    Input
+    ------
+    clusterList: 
+    markerType: String for name of MarkerType - For objectj must match 
+    emptyMarker: Same for the empty marker type
+    markerStart: So that you can increase index when moving from shaft to spine
+    translation 
+
+    Output
+    ------
+    csv_list which is a list of 
+    list of list of strings containing the image, the marker, the type, and the coordinates
+
+    '''
     csv_list = []
     for cluster in clusterList:
         if translation == True:
@@ -975,9 +1115,361 @@ def cluster_csv(clusterList, markerType, emptyMarker, markerStart, translation):
             else:
                 new_markerType = markerType
                 coordinates = raw_marker_coordinates[point[0]][point[1]]
-            csv_list.append(["Image"+str(point[0]+1), "Marker"+str(markerStart), new_markerType, coordinates[0], coordinates[1], transformZ_ImageJtoObjectJ(coordinates[2])])
+
+            '''
+                Commented out by Amy so that I don't have to see the 
+                Marker string with every label. This probably messes with the 
+                original objectJ Macros but for napari 
+                this works correctly
+                This is a ~temporary~ solution
+            '''
+            #csv_list.append(["Image"+str(point[0]+1), "Marker"+str(markerStart), new_markerType, coordinates[0], coordinates[1], transformZ_ImageJtoObjectJ(coordinates[2])])
+            csv_list.append(["Image"+str(point[0]+1), markerStart, new_markerType, coordinates[0], coordinates[1], transformZ_ImageJtoObjectJ(coordinates[2])])
         markerStart += 1
     return csv_list
+
+
+'''
+Napari types implementation Starts Here
+- Amy
+
+'''
+def napari_view(csv_list, markerType, emptyMarker, viewer_mapping): 
+    '''
+    Input
+    -----
+    csv_list as described in the cluster_csv function
+    markerType: type of marker (e.g. "InhibitoryShaft" or "SpinewithInhSynapse")
+    emptyMarker: type for missing markers (e.g. "Nothing" or "NudeSpine")
+    viewer_mapping: dictionary mapping timepoint to viewer instance
+    '''
+    # Define color mapping for different marker types
+    color_map = {
+        'InhibitoryShaft': 'red',
+        'Nothing': 'gray',
+        'SpinewithInhSynapse': 'blue', 
+        'NudeSpine': 'lightblue'
+    }
+
+    timepoint_grouping = defaultdict(list)
+    
+    # Group points by timepoint
+    for element in csv_list:
+        timepoint = int(element[0][-1])
+        timepoint_grouping[timepoint].append(element[0:6])
+
+    # Add each timepoint's points as a separate layer
+    for timepoint, elements in timepoint_grouping.items():
+        points = np.array([[transformZ_ObjectJtoImageJ(el[5]), el[4], el[3]] for el in elements])
+        features = {
+            'label': [el[1] for el in elements],
+            'type': [el[2] for el in elements]
+        }
+        text = {
+            "string": [el[1] for el in elements],
+            'size': 10,
+            'color': 'white',
+        }
+        
+        # Get colors based on marker types
+        face_colors = [color_map[el[2]] for el in elements]
+        
+        viewer = viewer_mapping.get(timepoint)
+        viewer.add_points(
+            points,
+            features=features,
+            size=5,
+            edge_width=0.1,
+            edge_width_is_relative=True,
+            edge_color='white',
+            face_color=face_colors,  # Use the color list instead of face_color_cycle
+            text=text,
+            name=f'Timepoint: {timepoint} Type: {markerType}'
+        )
+
+def load_fourchannel_image(image_path, image_name, viewer):
+    '''
+    Input:
+    ------
+    input the image path and the name/timepoint of the image_name and the viewer the image is added to
+    
+    '''
+    print(f'Loading Image {image_name}')
+    image = tif.imread(image_path)
+
+    ch1 = image[:, 0, :, :]
+    ch2 = image[:, 1, :, :]
+    ch3 = image[:, 2, :, :] 
+    ch4 = image[:, 3, :, :]
+
+    viewer.add_image(ch1, name = f'Gephyrin {image_name}', colormap = 'green', blending = 'additive')
+    viewer.add_image(ch2, name = f'RFP {image_name}', colormap = 'cyan', blending = 'additive')
+    viewer.add_image(ch3, name = f'Cell Fill {image_name}', colormap = 'gray', blending = 'additive')
+    viewer.add_image(ch4, name = f'Bassoon {image_name}', colormap = 'yellow', blending = 'additive')
+
+def testResults(actual_csv_path, predicted_csv_list):
+    '''
+    Compare manually checked results with algorithm predictions and visualize in napari
+    '''
+    # Read actual results
+    df_actual = pd.read_csv(actual_csv_path)
+    
+    # Convert predicted results to dataframe
+    predicted_df = pd.DataFrame(predicted_csv_list, 
+                              columns=['image', 'markerID', 'markerType', 'x', 'y', 'z'])
+    
+    # Define color mapping with lowercase keys
+    color_map = {
+        'inhibitoryshaft': 'red',
+        'nothing': 'gray',
+        'spinewithinhibitorysynapse': 'blue',
+        'spinewithinhsynapse': 'blue',  # Alternative spelling
+        'nudespine': 'lightblue',
+        'landmark': 'white'  # Added in case landmarks are present
+    }
+
+    # Helper function to get color safely
+    def get_color(marker_type):
+        return color_map.get(str(marker_type).lower(), 'white')  # Default to white if type not found
+    
+    # Lists to store points and their colors
+    correct_points = []
+    incorrect_pred_points = []
+    missed_actual_points = []
+    
+    # Lists to store labels
+    correct_labels = []
+    incorrect_pred_labels = []
+    missed_actual_labels = []
+    
+    # Lists to store detailed information about errors
+    incorrect_predictions_info = []
+    missed_actuals_info = []
+    
+    # Lists to store actual points data
+    actual_all_points = []
+    actual_all_labels = []
+    actual_all_colors = []
+    
+    # Lists to store all predicted points data (add these with other list declarations)
+    predicted_all_points = []
+    predicted_all_labels = []
+    predicted_all_colors = []
+    
+    for image in range(1, 7):
+        image_col = f'S{image}'
+        final_col = f'Final S{image}'
+        xpos_col = f'xpos S{image}'
+        ypos_col = f'ypos S{image}'
+        zpos_col = f'zpos S{image}'
+        
+        image_name = f'Image{image}'
+        
+        # Get actual markers
+        actual_coords = list(zip(df_actual[xpos_col], 
+                               df_actual[ypos_col],
+                               df_actual[zpos_col]))
+        actual_types = df_actual[final_col].tolist()
+        actual_groups = df_actual['Marker'].tolist()  # Get actual group numbers
+        
+        # Collect actual points data (skipping NaN values)
+        valid_rows = df_actual[~pd.isna(df_actual[final_col])]
+        coords = list(zip(valid_rows[xpos_col], 
+                         valid_rows[ypos_col],
+                         valid_rows[zpos_col]))
+        types = valid_rows[final_col].tolist()
+        groups = valid_rows['Marker'].tolist()
+        
+        actual_all_points.extend(coords)
+        actual_all_labels.extend([f"A{group}" for group in groups])
+        actual_all_colors.extend([get_color(type_) for type_ in types])
+        
+        # Get predicted markers
+        pred_image = predicted_df[predicted_df['image'] == image_name]
+        pred_coords = list(zip(pred_image['x'],
+                             pred_image['y'], 
+                             pred_image['z']))
+        pred_types = pred_image['markerType'].tolist()
+        pred_groups = pred_image['markerID'].tolist()  # Get predicted group numbers
+        
+        # Track which points have been matched
+        actual_matched = [False] * len(actual_coords)
+        pred_matched = [False] * len(pred_coords)
+        
+        # Find matches
+        for i, (actual_coord, actual_type) in enumerate(zip(actual_coords, actual_types)):
+            # Skip NaN values in actual_type
+            if pd.isna(actual_type):
+                continue
+                
+            for j, (pred_coord, pred_type) in enumerate(zip(pred_coords, pred_types)):
+                if not pred_matched[j] and str(actual_type).lower() == str(pred_type).lower():
+                    # Calculate distance
+                    dist = np.sqrt(sum((a - b) ** 2 for a, b in zip(actual_coord, pred_coord)))
+                    if dist <= 2.0:  # 2μm threshold
+                        correct_points.append(pred_coord)
+                        correct_labels.append(f"P{pred_groups[j]}/A{actual_groups[i]}")
+                        actual_matched[i] = True
+                        pred_matched[j] = True
+                        break
+        
+        # Add unmatched predictions to incorrect list
+        for j, (pred_coord, matched) in enumerate(zip(pred_coords, pred_matched)):
+            if not matched:
+                incorrect_pred_points.append(pred_coord)
+                incorrect_pred_labels.append(f"P{pred_groups[j]}")
+                incorrect_predictions_info.append({
+                    'timepoint': image,
+                    'coordinates': pred_coord,
+                    'type': pred_types[j],
+                    'group': pred_groups[j]
+                })
+        
+        # Add unmatched actual points to missed list
+        for i, (actual_coord, matched) in enumerate(zip(actual_coords, actual_matched)):
+            if not matched and not pd.isna(actual_types[i]):
+                missed_actual_points.append(actual_coord)
+                missed_actual_labels.append(f"A{actual_groups[i]}")
+                missed_actuals_info.append({
+                    'timepoint': image,
+                    'coordinates': actual_coord,
+                    'type': actual_types[i],
+                    'group': actual_groups[i]
+                })
+        
+        # Collect predicted points data (add this after getting pred_image)
+        pred_coords = list(zip(pred_image['x'],
+                             pred_image['y'], 
+                             pred_image['z']))
+        pred_types = pred_image['markerType'].tolist()
+        pred_groups = pred_image['markerID'].tolist()
+        
+        # Add all predicted points data
+        predicted_all_points.extend(pred_coords)
+        predicted_all_labels.extend([f"P{group}" for group in pred_groups])
+        predicted_all_colors.extend([get_color(type_) for type_ in pred_types])
+    
+    # Create napari viewer
+    viewer = napari.Viewer(ndisplay=3)
+    
+    # Add actual points layer
+    if actual_all_points:
+        viewer.add_points(
+            actual_all_points,
+            size=10,
+            face_color=actual_all_colors,
+            name='Actual Points',
+            text={
+                'string': actual_all_labels,
+                'size': 10,
+                'color': 'white'
+            }
+        )
+    
+    # Add predicted points layer (new)
+    if predicted_all_points:
+        viewer.add_points(
+            predicted_all_points,
+            size=10,
+            face_color=predicted_all_colors,
+            name='Predicted Points',
+            text={
+                'string': predicted_all_labels,
+                'size': 10,
+                'color': 'white'
+            }
+        )
+    
+    # Add comparison layers
+    if correct_points:
+        viewer.add_points(
+            correct_points, 
+            size=10, 
+            face_color='green',
+            name='Correct Predictions',
+            text={
+                'string': correct_labels,
+                'size': 10,
+                'color': 'white'
+            }
+        )
+    
+    if incorrect_pred_points:
+        viewer.add_points(
+            incorrect_pred_points, 
+            size=10, 
+            face_color='red',
+            name='Incorrect Predictions',
+            text={
+                'string': incorrect_pred_labels,
+                'size': 10,
+                'color': 'white'
+            }
+        )
+    
+    if missed_actual_points:
+        viewer.add_points(
+            missed_actual_points, 
+            size=10, 
+            face_color='yellow',
+            name='Missed Actual Points',
+            text={
+                'string': missed_actual_labels,
+                'size': 10,
+                'color': 'white'
+            }
+        )
+    
+    # Print metrics
+    total_actual = len(correct_points) + len(missed_actual_points)
+    total_predicted = len(correct_points) + len(incorrect_pred_points)
+    correct_predictions = len(correct_points)
+    
+    precision = correct_predictions / total_predicted if total_predicted > 0 else 0
+    recall = correct_predictions / total_actual if total_actual > 0 else 0
+    f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+
+    print(f"\nAlignment Results:")
+    print(f"Total actual markers: {total_actual}")
+    print(f"Total predicted markers: {total_predicted}")
+    print(f"Correctly predicted markers: {correct_predictions}")
+    print(f"Precision: {precision:.2f}")
+    print(f"Recall: {recall:.2f}")
+    print(f"F1 Score: {f1:.2f}")
+    
+    print("\nIncorrect Predictions:")
+    for info in incorrect_predictions_info:
+        print(f"Timepoint {info['timepoint']}: {info['type']} Group {info['group']} at coordinates {info['coordinates']}")
+    
+    print("\nMissed Actual Points:")
+    for info in missed_actuals_info:
+        print(f"Timepoint {info['timepoint']}: {info['type']} Group {info['group']} at coordinates {info['coordinates']}")
+    
+    return viewer
+
+''' 
+Napari exports are grouped with Phoebe's CSV Exports below
+in each try/except This should all be put in a main function because this is dumb
+Also make the viewers more readable i.e. loop and path loop. 
+'''
+# viewer1 = napari.Viewer()
+# viewer2 = napari.Viewer()
+# viewer3 = napari.Viewer()
+# viewer4 = napari.Viewer()
+# viewer5 = napari.Viewer()
+# viewer6 = napari.Viewer()
+# viewer_mapping = {1:viewer1, 
+#                   2: viewer2, 
+#                   3: viewer3, 
+#                   4: viewer4, 
+#                   5: viewer5, 
+#                   6: viewer6}
+# # load_fourchannel_image(r"Z:\Amy\files_for_amy_fromJoe\example_analysis_SOM022\Automated_Puncta_Detection\Image1\With_normch4-SOM022_Image 1_MotionCorrected.tif", 'image1', viewer1)
+# # load_fourchannel_image(r"Z:\Amy\files_for_amy_fromJoe\example_analysis_SOM022\Automated_Puncta_Detection\Image2\With_normch4-SOM022_Image 2_MotionCorrected.tif", 'image2', viewer2)
+# # load_fourchannel_image(r"Z:\Amy\files_for_amy_fromJoe\example_analysis_SOM022\Automated_Puncta_Detection\Image3\With_normch4-SOM022_Image 3_MotionCorrected.tif", 'image3', viewer3)
+# # load_fourchannel_image(r"Z:\Amy\files_for_amy_fromJoe\example_analysis_SOM022\Automated_Puncta_Detection\Image4\With_normch4-SOM022_Image 4_MotionCorrected.tif", 'image4', viewer4)
+# # load_fourchannel_image(r"Z:\Amy\files_for_amy_fromJoe\example_analysis_SOM022\Automated_Puncta_Detection\Image5\With_normch4-SOM022_Image 5_MotionCorrected.tif", 'image5', viewer5)
+# # load_fourchannel_image(r"Z:\Amy\files_for_amy_fromJoe\example_analysis_SOM022\Automated_Puncta_Detection\Image6\With_normch4-SOM022_Image 6_MotionCorrected.tif", 'image6', viewer6)
 
 try:
     shaft_grouping_list
@@ -988,17 +1480,19 @@ except NameError:
 else:
     shaft_clusters_csv= cluster_csv(shaft_grouping_list, "InhibitoryShaft", "Nothing", 1, False)
     num_shaft_markers = len(shaft_grouping_list)
-
+ 
 try:
     spine_grouping_list
 except NameError:
     print("There are no spine synapses for this branch.")
     num_spine_markers = 0
     spine_clusters_csv = []
-else:
+else: 
     spine_clusters_csv = cluster_csv(spine_grouping_list, "SpinewithInhSynapse", "NudeSpine", len(shaft_grouping_list)+1, True)
+    print(spine_clusters_csv)
     num_spine_markers = len(spine_grouping_list)
 
+# napari.run()
 num_shafts_and_spines = num_shaft_markers + num_spine_markers
 landmark_csv = []
 for i in range(len(raw_fiducials_coordinates)):
@@ -1008,11 +1502,21 @@ for i in range(len(raw_fiducials_coordinates)):
         num_landmarks += 1
 
 export_cluster_csv = shaft_clusters_csv + spine_clusters_csv + landmark_csv
+testing_csv = shaft_clusters_csv + spine_clusters_csv 
+#Running TESTING HERE
+print('started testing')
+metrics = testResults('/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/PunctaScoring/b2/SynapseMarkers/Aligned_afterManualCheck/CombinedResults.csv', testing_csv)
+napari.run()
+print(metrics)
+print('finished testing')
+
+# napari_view(shaft_clusters_csv, "InhibitoryShaft", "Nothing", viewer_mapping)
+# napari_view(spine_clusters_csv,  "SpinewithInhSynapse", "NudeSpine", viewer_mapping)
 
 np.savetxt(export_csv_directory+ '/autoAlignment/' + str(animal_ID) + '_b' + str(branch_ID) +'_alignmentMapping.csv', export_cluster_csv, header="image, markerID, markerType, marker_X, marker_Y, marker_Z", delimiter=',', fmt='%s', comments='')
 print("Exported the alignment mapping to " + export_csv_directory+ '/autoAlignment/' + str(animal_ID) + '_b' + str(branch_ID) +'_alignmentMapping.csv')
 print("FINISHED THE MAPPING SECTION, yay! \n\nFINISHED RUNNING.")
 
-
+ 
 
 
