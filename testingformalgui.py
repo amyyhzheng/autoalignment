@@ -227,7 +227,6 @@ def go_to_point(viewer: napari.Viewer, point_number: int):
         viewer.camera.center = (point_coords[0], point_coords[1], point_coords[2])  # Reverse order for camera
         viewer.camera.zoom = 8  # Adjust zoom level as needed
 
-        # If the data is in 3D, move to the specific Z slice
         if len(point_coords) > 2:
             viewer.dims.set_point(2, point_coords[2])  # Adjust for Z dimension if needed
     except (IndexError, KeyError):
@@ -318,13 +317,22 @@ class AddPointsFromCSVWidget(QWidget):
 def configure_viewer(viewer, image, viewer_index):
     """Configures each viewer with images, points layers, and widgets."""
     viewer.title = f"Viewer {viewer_index + 1}"
-    ch1, ch2, ch3, ch4 = image[:, 0, :, :], image[:, 1, :, :], image[:, 2, :, :], image[:, 3, :, :]
-
-    viewer.add_image(ch1, name='Ch1: RFP', blending='additive', colormap='cyan')
-    viewer.add_image(ch2, name='Ch2: Gephyrin', blending='additive', colormap='green')
-    viewer.add_image(ch3, name='Ch3: Cell Fill', blending='additive', colormap='white')
-    viewer.add_image(ch4, name='Ch4: Bassoon', blending='additive', colormap='red')
-
+# Check the number of channels in the image
+    if image.shape[1] == 4:  # 4-channel image
+        ch1, ch2, ch3, ch4 = image[:, 0, :, :], image[:, 1, :, :], image[:, 2, :, :], image[:, 3, :, :]
+        viewer.add_image(ch1, name='Ch1: RFP', blending='additive', colormap='cyan')
+        viewer.add_image(ch2, name='Ch2: Gephyrin', blending='additive', colormap='green')
+        viewer.add_image(ch3, name='Ch3: Cell Fill', blending='additive', colormap='white')
+        viewer.add_image(ch4, name='Ch4: Bassoon', blending='additive', colormap='red')
+    elif image.shape[1] == 3:  # 3-channel image
+        ch1, ch2, ch3 = image[:, 0, :, :], image[:, 1, :, :], image[:, 2, :, :]
+        viewer.add_image(ch1, name='Ch1: RFP', blending='additive', colormap='cyan')
+        viewer.add_image(ch2, name='Ch2: Gephyrin', blending='additive', colormap='green')
+        viewer.add_image(ch3, name='Ch3: Cell Fill', blending='additive', colormap='white')
+    else:
+        raise ValueError(f"Unsupported number of channels: {image.shape[1]}")
+    
+    
     # Initialize points layers and UpdatePointTypeWidget
     points_layers = {}
     points_layer = viewer.add_points(
