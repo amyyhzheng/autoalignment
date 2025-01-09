@@ -26,3 +26,27 @@ points_layer = viewer.add_points(
     face_color_cycle=face_color_cycle,
     text={'text': 'label', 'size': 10, 'color': 'white', 'anchor': 'center'}
 )
+
+@magicgui(call_button="Center on Point")
+def go_to_point(point_number: int):
+    try:
+        # Retrieve the 'label' column from the features as a pandas Series
+        labels = points_layer.features['label']
+        
+        # Find the index of the specified label using a boolean condition
+        point_index = labels[labels == point_number].index[0]
+        
+
+        # Get the coordinates of the specified point
+        point_coords = points_layer.data[point_index]
+        print(point_coords)
+        
+        # Set the viewer camera to center on the specified point
+        viewer.camera.center = (point_coords[0], point_coords[1], point_coords[2])
+        viewer.camera.zoom = 8
+        # Move to the specific Z slice if your data is in 3D
+        # viewer.dims.set_point(2, point_coords[2])  # Adjust if Z is in a different dimension
+        
+    except (IndexError, KeyError):
+        print("Point number not found in labels or label feature missing.")
+
