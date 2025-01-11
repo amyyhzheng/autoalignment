@@ -63,7 +63,7 @@ def create_point_label_handler(points_layer):
     @points_layer.events.data.connect
     def label_points(event):
         num_points = len(points_layer.data)
-        points_layer.feature_defaults['label'] = (points_layer.properties['label'][-1] + 1 if num_points else 1)
+        points_layer.properties['label'][-1] = (points_layer.properties['label'][-1] + 1 if num_points else 1)
     return label_points
 
 
@@ -123,17 +123,21 @@ class UpdatePointTypeWidget(QWidget):
                 for idx in selected_points:
                     self.current_points_layer.features['type'][idx] = point_type
                 
-                # Map 'type' to 'face_color' and update
-                self.current_points_layer.features['face_color'] = map_types_to_colors(
-                    self.current_points_layer.features['type']
-                )
+                # Update all face colors based on types
+                all_types = self.current_points_layer.features['type']
+                new_colors = map_types_to_colors(all_types)
                 
-                # Explicitly set the face_color property and refresh colors
-                self.current_points_layer.face_color = 'face_color'
-                self.current_points_layer.refresh_colors(update_color_mapping=True)
+                # Update the face colors for all points
+                self.current_points_layer.face_color = new_colors
+                self.current_points_layer.face_color_mode = 'direct'
+                
+                # Force a refresh
+                self.current_points_layer.refresh_colors()
             else:
                 # Update default for new points
                 self.current_points_layer.feature_defaults['type'] = point_type
+                color = map_types_to_colors([point_type])[0]
+                self.current_points_layer.feature_defaults['face_color'] = color
 
             
     def add_new_type(self):
@@ -189,15 +193,25 @@ class UpdatePointTypeWidget(QWidget):
         if self.current_points_layer is not None:
             selected_points = list(self.current_points_layer.selected_data)
             if selected_points:
+                # Update 'type' feature for selected points
                 for idx in selected_points:
                     self.current_points_layer.features['type'][idx] = point_type
-                # Update the face_color feature based on the updated type
-                self.current_points_layer.features['face_color'] = map_types_to_colors(
-                    self.current_points_layer.features['type']
-                )
-                self.current_points_layer.refresh_colors(update_color_mapping=False)
+                
+                # Update all face colors based on types
+                all_types = self.current_points_layer.features['type']
+                new_colors = map_types_to_colors(all_types)
+                
+                # Update the face colors for all points
+                self.current_points_layer.face_color = new_colors
+                self.current_points_layer.face_color_mode = 'direct'
+                
+                # Force a refresh
+                self.current_points_layer.refresh_colors()
             else:
+                # Update default for new points
                 self.current_points_layer.feature_defaults['type'] = point_type
+                color = map_types_to_colors([point_type])[0]
+                self.current_points_layer.feature_defaults['face_color'] = color
 
 class AddPointsLayerWidget(QWidget):
     """Widget to add new points layers dynamically."""
@@ -224,22 +238,37 @@ class AddPointsLayerWidget(QWidget):
             size=7,
             edge_width=0.1,
             edge_color='white',
-            face_color=map_types_to_colors(initial_features['type']),
+            face_color=map_types_to_colors(initial_features['type'])[0],
             text={'text': 'label', 'size': 10, 'color': 'white', 'anchor': 'center'},
             name=layer_name,
         )
+
         self.points_layers[layer_name] = points_layer
 
-        # Configure point defaults
-        points_layer.feature_defaults = {'label': 1, 'confidence': 1, 'type': '-1: Nothing'}
+        # Configure point defaults with correct type and initial label
+        points_layer.feature_defaults = {
+            'label': 1, 
+            'confidence': 1, 
+            'type': 'Ignore',
+            'face_color': map_types_to_colors(['Ignore'])[0]
+        }
+        
+        # Create handler for auto-incrementing labels
         create_point_label_handler(points_layer)
+
+        # Set initial features for the layer
+        points_layer.features = {
+            'label': np.array([1]),
+            'confidence': np.array([1]),
+            'type': np.array(['Ignore']),
+            'face_color': np.array([map_types_to_colors(['Ignore'])[0]])
+        }
 
         # Update the UpdatePointTypeWidget with the new layer
         self.update_widget.points_layers = self.points_layers
         self.update_widget.update_widget_for_active_layer(None)  # Force update
 
         print(f"Added new points layer: {layer_name}")
-
 @magicgui(call_button="Center on Point")
 def go_to_point(viewer: napari.Viewer, point_number: int):
     """
@@ -384,14 +413,20 @@ def configure_viewer(viewer, image, viewer_index):
         size=7,
         edge_width=0.1,
         edge_color='white',
-        face_color='face_color',
+        face_color=map_types_to_colors(['Ignore'])[0],  # Set initial face color directly
         text={'text': 'label', 'size': 10, 'color': 'white', 'anchor': 'center'},
         name=f"Points Layer 1",
     )
     points_layers["Points Layer 1"] = points_layer
-    points_layer.feature_defaults = {'label': 1, 'confidence': 1, 'type': 'Ignore', 'face_color': map_types_to_colors(['Ignore'])}
+    points_layer.feature_defaults = {
+        'label': 1, 
+        'confidence': 1, 
+        'type': 'Ignore', 
+        'face_color': map_types_to_colors(['Ignore'])[0]  # Set default face color directly
+    }
+    # Set the face color property to use the feature
+    points_layer.face_color_mode = 'direct'
     lable_handler = create_point_label_handler(points_layer)
-
 
     # Add UpdatePointTypeWidget
     update_widget = UpdatePointTypeWidget(viewer, points_layers)
