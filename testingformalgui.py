@@ -17,13 +17,13 @@ image_paths = [
    '/Users/amyzheng/Desktop/downloadedimages/60x Si 1061_16_A 1024RS_5ADVMLE.tif'
 ]
 type_to_color = {
+    'Ignore': 'black',
     'ShaftGephBassoonNoSynTd': 'yellow',
     'ShaftGephBassoonSynTd': 'cyan',
     'SpineGephBassoonNoSynTd': 'green',
     'SpineGephBassoonSynTd': 'blue',
     'GephNoBassoon': 'red',
-    'Ambiguous': 'magenta',
-    'Ignore': 'black',
+    'Ambiguous': 'magenta'
 }
 
 def map_types_to_colors(types):
@@ -144,16 +144,22 @@ class UpdatePointTypeWidget(QWidget):
         new_type = self.new_type.text()
         new_color = self.new_color.text()
 
-        new_type = self.new_type.text()
-        new_color = self.new_color.text()
         if new_type and new_color.startswith('#') and len(new_color) == 7:
             if new_type not in type_choices:
+                # Add to type_to_color dictionary
+                type_to_color[new_type] = new_color
+                # Add to type choices
                 type_choices.append(new_type)
-                face_color_cycle.append(new_color)
+                # Add to combo box
                 self.combo_box.addItem(new_type)
-                # Update the points layer with the new color cycle if it exists
+
                 if self.current_points_layer is not None:
-                    self.current_points_layer.face_color_cycle = face_color_cycle.copy()
+                    # Update colors based on current types
+                    all_types = self.current_points_layer.features['type']
+                    new_colors = map_types_to_colors(all_types)
+                    self.current_points_layer.face_color = new_colors
+                    self.current_points_layer.refresh()
+                
                 # Clear the input fields
                 self.new_type.clear()
                 self.new_color.setText('#ff5733')
@@ -269,6 +275,8 @@ class AddPointsLayerWidget(QWidget):
         self.update_widget.update_widget_for_active_layer(None)  # Force update
 
         print(f"Added new points layer: {layer_name}")
+
+
 @magicgui(call_button="Center on Point")
 def go_to_point(viewer: napari.Viewer, point_number: int):
     """
