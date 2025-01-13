@@ -406,9 +406,9 @@ def configure_viewer(viewer, image, viewer_index):
         viewer.add_image(ch4, name='Ch4: Bassoon', blending='additive', colormap='red')
     elif image.shape[1] == 3:  # 3-channel image
         ch1, ch2, ch3 = image[:, 0, :, :], image[:, 1, :, :], image[:, 2, :, :]
-        viewer.add_image(ch1, name='Ch1: RFP', blending='additive', colormap='cyan')
-        viewer.add_image(ch2, name='Ch2: Gephyrin', blending='additive', colormap='green')
-        viewer.add_image(ch3, name='Ch3: Cell Fill', blending='additive', colormap='white')
+        viewer.add_image(ch1, name='Ch1: Gephyrin', blending='additive', colormap='green')
+        viewer.add_image(ch2, name='Ch2: Cell Fill', blending='additive', colormap='red')
+        viewer.add_image(ch3, name='Ch3: RFP', blending='additive', colormap='cyan')
     else:
         raise ValueError(f"Unsupported number of channels: {image.shape[1]}")
     
