@@ -1,10 +1,13 @@
-def create_point_label_handler(points_layer):
-    """Creates a handler to manage point labeling incrementally."""
-    @points_layer.events.data.connect
     def label_points(event):
-        num_points = len(points_layer.data)
-        if num_points > len(points_layer.features['label']):
-            # Add a new label for the newly added point
-            new_label = points_layer.features['label'][-1] + 1
-            points_layer.features['label'] = np.append(points_layer.features['label'], new_label)
+        current_num_points = len(points_layer.data)
+        num_existing_labels = len(points_layer.features['label'])
+
+        if current_num_points > num_existing_labels:
+            new_labels = np.arange(num_existing_labels + 1, current_num_points + 1)
+            points_layer.features['label'] = np.append(points_layer.features['label'], new_labels)
+
+            # Refresh after updating the labels
+            points_layer.refresh()
+
+        print(f"Updated Labels: {points_layer.features['label']}")
     return label_points
