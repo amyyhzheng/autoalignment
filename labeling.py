@@ -13,8 +13,7 @@ if not app:
 
 # Path to your 3-channel TIFF images
 image_paths = [
-   '/Users/amyzheng/Desktop/downloadedimages/60x Si 1061_16_A 1024RS_5ADVMLE.tif', 
-   '/Users/amyzheng/Desktop/downloadedimages/60x Si 1061_16_A 1024RS_5ADVMLE.tif'
+r"Z:\Amy\Imaging\2024_8_23_1317_Coronal_Section_YFPonly\TiffSaveinLab\2024-8-30_session2.lif - 1317#1_dob2-16-24_Ms-Gephyrin-488__Rb...Ch-GFP-568_Gp-Bassoon-647__63x_0.66zstepsize_1.46zoom__Cell1A4.tif"
 ]
 type_to_color = {
     'Ignore': 'black',
@@ -63,7 +62,13 @@ def create_point_label_handler(points_layer):
     @points_layer.events.data.connect
     def label_points(event):
         num_points = len(points_layer.data)
-        points_layer.properties['label'][-1] = (points_layer.properties['label'][-1] + 1 if num_points else 1)
+        labels = points_layer.features.get('label', pd.Series(dtype=int))
+
+        # Check if labels exist correctly
+        new_label = (labels.iloc[-1] + 1) if not labels.empty else 0
+        
+        points_layer.feature_defaults['label'] = new_label if num_points > 1 else 0
+        print(f"Updated Labels: {points_layer.features['label']}")
     return label_points
 
 
@@ -253,7 +258,7 @@ class AddPointsLayerWidget(QWidget):
 
         # Configure point defaults with correct type and initial label
         points_layer.feature_defaults = {
-            'label': 1, 
+            'label': 0, 
             'confidence': 1, 
             'type': 'Ignore',
             'face_color': map_types_to_colors(['Ignore'])[0]
@@ -365,9 +370,6 @@ class AddPointsFromCSVWidget(QWidget):
                 'type': df['type'].values if 'type' in df.columns else np.array(['Unknown'] * len(df))
             }
 
-            # Set the face color cycle for the 'type' category
-            face_color_cycle = ['blue', 'green', 'yellow', 'red', 'magenta', 'purple']
-
             # Add a new points layer
             layer_name = f"Points Layer {len(self.points_layers) + 1}"
             points_layer = self.viewer.add_points(
@@ -376,15 +378,14 @@ class AddPointsFromCSVWidget(QWidget):
                 size=7,
                 edge_width=0.1,
                 edge_color='white',
-                face_color='type',
-                face_color_cycle=face_color_cycle,
+                face_color = map_types_to_colors(features['type']),
                 text={'text': 'label', 'size': 10, 'color': 'white', 'anchor': 'center'},
                 name=layer_name,
             )
 
             # Add the new layer to points_layers dictionary
             self.points_layers[layer_name] = points_layer
-
+            create_point_label_handler(points_layer)
             # Update the UpdatePointTypeWidget with the new layer
             self.update_widget.points_layers = self.points_layers
             self.update_widget.update_widget_for_active_layer(None)  # Force update
@@ -406,9 +407,9 @@ def configure_viewer(viewer, image, viewer_index):
         viewer.add_image(ch4, name='Ch4: Bassoon', blending='additive', colormap='red')
     elif image.shape[1] == 3:  # 3-channel image
         ch1, ch2, ch3 = image[:, 0, :, :], image[:, 1, :, :], image[:, 2, :, :]
-        viewer.add_image(ch1, name='Ch1: Gephyrin', blending='additive', colormap='green')
-        viewer.add_image(ch2, name='Ch2: Cell Fill', blending='additive', colormap='red')
-        viewer.add_image(ch3, name='Ch3: RFP', blending='additive', colormap='cyan')
+        viewer.add_image(ch1, name='Ch1: RFP', blending='additive', colormap='cyan')
+        viewer.add_image(ch2, name='Ch2: Gephyrin', blending='additive', colormap='green')
+        viewer.add_image(ch3, name='Ch3: Cell Fill', blending='additive', colormap='white')
     else:
         raise ValueError(f"Unsupported number of channels: {image.shape[1]}")
     
@@ -427,7 +428,7 @@ def configure_viewer(viewer, image, viewer_index):
     )
     points_layers["Points Layer 1"] = points_layer
     points_layer.feature_defaults = {
-        'label': 1, 
+        'label': 0, 
         'confidence': 1, 
         'type': 'Ignore', 
         'face_color': map_types_to_colors(['Ignore'])[0]  # Set default face color directly
