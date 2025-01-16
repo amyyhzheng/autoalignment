@@ -11,7 +11,7 @@ app = QApplication.instance()  # Check if a QApplication is already running
 if not app:
     app = QApplication(sys.argv)
 
-# Path to your 3-channel TIFF images
+# Path to your 3-channel and/or 4-channel TIFF images separated by comma
 image_paths = [
 r"Z:\Amy\Imaging\2024_8_23_1317_Coronal_Section_YFPonly\TiffSaveinLab\2024-8-30_session2.lif - 1317#1_dob2-16-24_Ms-Gephyrin-488__Rb...Ch-GFP-568_Gp-Bassoon-647__63x_0.66zstepsize_1.46zoom__Cell1A4.tif"
 ]
