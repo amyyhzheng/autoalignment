@@ -89,28 +89,35 @@ std_intensity = dendrite_pixels.std()
 print(f"Mean intensity: {mean_intensity}")
 print(f"Standard deviation: {std_intensity}")
 
-# Define threshold for gephyrin puncta
-num_stddevs = 1
-threshold = mean_intensity + num_stddevs * std_intensity
-min_puncta_size = 7
+# # Define threshold for gephyrin puncta
+# num_stddevs = 1
+# min_puncta_size = 7
+for num_stddevs in range(0, 3):
+    threshold = mean_intensity + num_stddevs * std_intensity
+    for min_puncta_size in range(3, 8):
+        puncta_mask = normch4_dendrites > threshold
+        puncta_mask = clear_border(puncta_mask)
+        puncta_mask = remove_small_objects(puncta_mask, min_size=min_puncta_size)
+        # Label and save puncta ROIs
+        labels = label(puncta_mask)
+        props = regionprops(labels)
+
+        viewer.add_labels(labels, name=f'Thresh={num_stddevs} connect={min_puncta_size}')
+
 
 # Threshold normch4 to detect gephyrin puncta
-puncta_mask = normch4_dendrites > threshold
-puncta_mask = clear_border(puncta_mask)
-puncta_mask = remove_small_objects(puncta_mask, min_size=min_puncta_size)
 
 # Label and save puncta ROIs
 labels = label(puncta_mask)
 props = regionprops(labels)
 
-roi_save_path = 'puncta_rois.txt'
-with open(roi_save_path, 'w') as f:
-    for prop in props:
-        f.write(f"{prop.bbox}\n")
+# roi_save_path = 'puncta_rois.txt'
+# with open(roi_save_path, 'w') as f:
+#     for prop in props:
+#         f.write(f"{prop.bbox}\n")
 
-print(f"ROIs saved to {roi_save_path}")
+# print(f"ROIs saved to {roi_save_path}")
 
 # Display with napari
 viewer.add_image(image_with_normch4, name='Image with NormCh4')
-viewer.add_labels(labels, name='Gephyrin Puncta')
 napari.run()
