@@ -89,9 +89,6 @@ std_intensity = dendrite_pixels.std()
 print(f"Mean intensity: {mean_intensity}")
 print(f"Standard deviation: {std_intensity}")
 
-# # Define threshold for gephyrin puncta
-# num_stddevs = 1
-# min_puncta_size = 7
 # Define threshold for gephyrin puncta
 for num_stddevs in range(0, 3):
     threshold = mean_intensity + num_stddevs * std_intensity
@@ -103,12 +100,16 @@ for num_stddevs in range(0, 3):
         # Label the connected components
         labels = label(puncta_mask)
         
-        # Filter objects that do not have the exact size `min_puncta_size`
-        filtered_labels = np.zeros_like(labels)
+        # Create a binary mask for the filtered components
+        filtered_mask = np.zeros_like(labels, dtype=bool)
         for region in regionprops(labels):
             if region.area == min_puncta_size:
-                # Retain only regions with the exact size
-                filtered_labels[labels == region.label] = region.label
+                # Add the region to the binary mask
+                filtered_mask[labels == region.label] = True
+
+        # Add the binary mask to the viewer
+        viewer.add_labels(filtered_mask.astype(int), name=f'Thresh={num_stddevs} connect={min_puncta_size}')
+
 
 # Threshold normch4 to detect gephyrin puncta
 
