@@ -1,4 +1,4 @@
-** In Vivo Analysis Code **
+**In Vivo Analysis Code**
 
 labeling
 - constants.py: Contains Inhibitory Mapping and Excitatory Mapping. Contains initial points i.e. The [0, 0, 0] point for testing
