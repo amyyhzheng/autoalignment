@@ -20,6 +20,12 @@ INHIBITORY_TYPE_TO_COLOR = {
 EXCITATORY_MAPPING_NAME = "Aygul's Map"
 
 EXCITATORY_TYPE_TO_COLOR = {
+    '-1: Nothing': 'blue',
+    '0: SpinePSD95-NoSynTD': 'green',
+    '1: SpinePSD95-SynTD': 'yellow',
+    '3: NoSynNudeSpine': 'red',
+    '4: SynNudeSpine': 'purple', 
+    'Landmark': 'cyan'
 }
 
 # Initial points and features for all viewers
