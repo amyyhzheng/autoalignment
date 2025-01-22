@@ -45,7 +45,7 @@ def configure_viewer(viewer, image, viewer_index):
         viewer.add_image(ch2, name='Ch2: RFP', blending='additive', colormap='cyan')
         viewer.add_image(ch3, name='Ch3: Cell Fill', blending='additive', colormap='white')
         viewer.add_image(ch4, name='Ch4: Bassoon', blending='additive', colormap='red')
-        map_processing(ch1, ch2, ch3, ch4, viewer)
+        # map_processing(ch1, ch2, ch3, ch4, viewer)
 
     elif image.shape[1] == 3:  # 3-channel image
         ch1, ch2, ch3 = image[:, 0, :, :], image[:, 1, :, :], image[:, 2, :, :]
