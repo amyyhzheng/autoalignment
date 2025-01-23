@@ -5,6 +5,7 @@ from constants import INHIBITORY_MAPPING_NAME, INHIBITORY_TYPE_TO_COLOR, EXCITAT
 from typetocolor import TypeToColor
 
 if __name__ == "__main__":
+    #insert image file path(s) here, separated by comma if multiple images
     image_paths = [
     '/Users/amyzheng/Desktop/4056B14ApicalsmoothedR1.tiff'
     ]
