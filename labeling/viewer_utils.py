@@ -1,13 +1,9 @@
 import napari
 from constants import INITIAL_FEATURES, INITIAL_POINTS
 from typetocolor import TypeToColor
-from widgets import UpdatePointTypeWidget, go_to_point, AddPointsFromCSVWidget, AddPointsLayerWidget, ZoomLevelWidget
+from widgets import UpdatePointTypeWidget, CenterOnPointWidget, AddPointsFromCSVWidget, AddPointsLayerWidget, ZoomLevelWidget, AddPointsFromObjectJWidget
 from layer_utils import create_point_label_handler
 from constants import INHIBITORY_MAPPING_NAME, EXCITATORY_MAPPING_NAME, INHIBITORY_TYPE_TO_COLOR, EXCITATORY_TYPE_TO_COLOR
-from skimage.measure import label, regionprops
-from skimage.filters import threshold_otsu
-import numpy as np
-
 #TODO - Finish defining all for everything. Also maybe do default color mapping
 
 def ask_user_for_color_mapping():
@@ -36,26 +32,32 @@ def configure_viewer(viewer, image, viewer_index):
         print(f"Error during color mapping selection: {e}")
         return  # Exit if no mapping is selected
 
-    # Check the number of channels in the image
-    if image.shape[1] == 4:  # 4-channel image
-        # Assuming 'image' is a 4D array (samples, channels, height, width)
-        ch1, ch2, ch3, ch4 = image[:, 0, :, :], image[:, 1, :, :], image[:, 2, :, :], image[:, 3, :, :]
-        # Display images with the thresholding and colocalization results
-        viewer.add_image(ch1, name='Ch1: Gephyrin', blending='additive', colormap='green')
-        viewer.add_image(ch2, name='Ch2: RFP', blending='additive', colormap='cyan')
-        viewer.add_image(ch3, name='Ch3: Cell Fill', blending='additive', colormap='white')
-        viewer.add_image(ch4, name='Ch4: Bassoon', blending='additive', colormap='red')
-        # map_processing(ch1, ch2, ch3, ch4, viewer) #comment in this line to run automated puncta detection implemented as of 2024
-
-    elif image.shape[1] == 3:  # 3-channel image
+    if selected_mapping_name == EXCITATORY_MAPPING_NAME:
         ch1, ch2, ch3 = image[:, 0, :, :], image[:, 1, :, :], image[:, 2, :, :]
+        viewer.add_image(ch1, name='Ch1: Cell Fill', blending='additive', colormap='red', scale = [3.6, 1, 1])
+        viewer.layers['Ch1: Cell Fill'].contrast_limits = (3, 15)
+        viewer.add_image(ch2, name='Ch2: PSD95', blending='additive', colormap='cyan', scale = [3.6, 1, 1])
+        viewer.layers['Ch2: PSD95'].contrast_limits = (3, 15)
+        viewer.add_image(ch3, name='Ch3: Bouton', blending='additive', colormap='green', scale = [3.6, 1, 1])
+        viewer.layers['Ch3: Bouton'].contrast_limits = (3, 15)
+    # Check the number of channels in the image
+    elif image.shape[1] == 4:  # 4-channel image
+        ch1, ch2, ch3, ch4 = image[:, 0, :, :], image[:, 1, :, :], image[:, 2, :, :], image[:, 3, :, :]
         viewer.add_image(ch1, name='Ch1: RFP', blending='additive', colormap='cyan')
         viewer.add_image(ch2, name='Ch2: Gephyrin', blending='additive', colormap='green')
         viewer.add_image(ch3, name='Ch3: Cell Fill', blending='additive', colormap='white')
+        viewer.add_image(ch4, name='Ch4: Bassoon', blending='additive', colormap='red')
+    elif image.shape[1] == 3:  # 3-channel image
+        ch1, ch2, ch3 = image[:, 0, :, :], image[:, 1, :, :], image[:, 2, :, :]
+        viewer.add_image(ch1, name='Ch1: RFP', blending='additive', colormap='cyan', scale = [4, 1, 1])
+        viewer.add_image(ch2, name='Ch2: Gephyrin', blending='additive', colormap='green', scale = [4, 1, 1])
+        viewer.add_image(ch3, name='Ch3: Cell Fill', blending='additive', colormap='white', scale = [4, 1, 1]) 
+
+        # viewer.layers['Ch1: RFP'] = [4, 1, 1]
+        # viewer.layers['Ch2: Gephyrin'] = [4, 1, 1]
+        # viewer.layers['Ch3: Cell Fill'] = [4, 1, 1]
     else:
         raise ValueError(f"Unsupported number of channels: {image.shape[1]}")
-
-
 
     # Initialize points layers and UpdatePointTypeWidget
     points_layers = {}
@@ -87,60 +89,17 @@ def configure_viewer(viewer, image, viewer_index):
     add_layer_widget = AddPointsLayerWidget(viewer, points_layers, update_widget)
     viewer.window.add_dock_widget(add_layer_widget, name="Add Points Layer")
 
-    # Add the go_to_point widget
-    viewer.window.add_dock_widget(go_to_point)
+    center_point_widget = CenterOnPointWidget(viewer)
+    viewer.window.add_dock_widget(center_point_widget, name = "Center On Point")
 
     # Add AddPointsFromCSVWidget
     add_csv_widget = AddPointsFromCSVWidget(viewer, points_layers, update_widget)
     viewer.window.add_dock_widget(add_csv_widget, name="Load Points from CSV")
 
+
     # Add ZoomLevelWidget
     zoom_widget = ZoomLevelWidget(viewer)
     viewer.window.add_dock_widget(zoom_widget, name="Zoom Level")
 
-def map_processing(ch1, ch2, ch3, ch4, viewer):
-
-        # Thresholding Gephyrin (Ch1), Bassoon (Ch4), and Cell Fill (Ch3) channels using Otsu's method
-        thresh_ch1 = threshold_otsu(ch1)
-        thresh_ch4 = threshold_otsu(ch4)
-        thresh_ch3 = threshold_otsu(ch3)
-
-        # Apply thresholds
-        ch1_thresholded = ch1 > thresh_ch1
-        ch4_thresholded = ch4 > thresh_ch4
-        ch3_thresholded = ch3 > thresh_ch3  # Cell Fill thresholded mask
-
-        # Find colocalization (where both Gephyrin and Bassoon are above their thresholds)
-        colocalization = np.logical_and(ch1_thresholded, ch4_thresholded)
-
-        # Label the connected components in the thresholded images
-        labeled_ch1 = label(ch1_thresholded)
-        labeled_ch4 = label(ch4_thresholded)
-        labeled_colocalization = label(colocalization)
-
-        # Compute region properties (e.g., centroids) for each labeled region
-        regions_ch1 = regionprops(labeled_ch1)
-        regions_ch4 = regionprops(labeled_ch4)
-        regions_colocalization = regionprops(labeled_colocalization)
-
-        # Extract centroids from the regions
-        centroids_ch1 = [region.centroid for region in regions_ch1]
-        centroids_ch4 = [region.centroid for region in regions_ch4]
-        centroids_colocalization = [region.centroid for region in regions_colocalization]
-
-        filtered_areas = np.logical_and(labeled_colocalization, ch3_thresholded)
-        labeled_regions = label(filtered_areas)
-        filtered_regions = regionprops(labeled_regions)
-        filtered_centroids = [region.centroid for region in filtered_regions]
-
-        # Add thresholded Gephyrin and Bassoon images
-        viewer.add_image(ch1_thresholded, name='Ch1: Gephyrin Thresholded', blending='additive', colormap='green')
-        viewer.add_image(ch4_thresholded, name='Ch4: Bassoon Thresholded', blending='additive', colormap='red')
-        viewer.add_image(ch3_thresholded, name='Ch3: Cell Fill Thresholded', blending='additive', colormap='white')
-
-        # Add colocalization mask
-        viewer.add_image(colocalization, name='Colocalization (Gephyrin & Bassoon)')
-
-        # Add filtered centroids to the points layer (only inside the cell fill)
-        viewer.add_image(filtered_areas, name='Filtered Areas', blending='additive', colormap='yellow')
-        viewer.add_points(filtered_centroids, name = 'Filtered Centroids', blending = 'additive')
+    objectj_widget = AddPointsFromObjectJWidget(viewer, points_layers, update_widget)
+    viewer.window.add_dock_widget(objectj_widget, name = "Load Points from ObjectJ")
