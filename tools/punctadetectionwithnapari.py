@@ -6,11 +6,13 @@ from skimage.measure import label, regionprops, find_contours
 from skimage.segmentation import clear_border
 from skimage.morphology import remove_small_objects
 import napari
+from scipy.spatial import ConvexHull
+
 
 viewer = napari.Viewer()
 
 # Path to your 3-channel TIFF image
-image_path = '/Users/amyzheng/Desktop/9994 VS Cell 1 Mt 550 at 915_V0_P_STACK.tif'
+image_path = r"Z:\Amy\files_for_amy_fromJoe\example_analysis_SOM022\Automated_Puncta_Detection\Image1\With_normch4-SOM022_Image 1_MotionCorrected.tif"
 # Load the image
 image = tiff.imread(image_path)
 print(image.shape)
@@ -89,12 +91,23 @@ std_intensity = dendrite_pixels.std()
 print(f"Mean intensity: {mean_intensity}")
 print(f"Standard deviation: {std_intensity}")
 
-# Define threshold for gephyrin puncta
-for num_stddevs in range(0, 1):
+# Initialize a 3D array for stacking filtered mask planes
+stacked_labels = np.zeros((z, x, y), dtype=int)
+
+# Create a shapes layer for polygons
+shapes_layer = viewer.add_shapes(
+    name="Detected Regions", 
+    edge_color="red", 
+    face_color="transparent", 
+    shape_type="polygon"
+)
+
+# Loop over threshold and minimum puncta size combinations
+for num_stddevs in range(2, 3):
     threshold = mean_intensity + num_stddevs * std_intensity
     for min_puncta_size in range(4, 5):
-        # Label the connected components for each plane separately
-        for z_index in range(z):  # Iterate through each plane
+        # Process each z-plane separately
+        for z_index in range(z):
             # Create a binary mask for the current plane
             puncta_mask_plane = normch4_dendrites[z_index] > threshold
             puncta_mask_plane = clear_border(puncta_mask_plane)
@@ -102,36 +115,27 @@ for num_stddevs in range(0, 1):
             # Label the connected components in the current plane
             labels_plane = label(puncta_mask_plane)
             
-            # Create a binary mask for the filtered components in the current plane
-            filtered_mask_plane = np.zeros_like(labels_plane, dtype=bool)
+            # Filter regions and add polygons
             for region in regionprops(labels_plane):
-                if region.area >= min_puncta_size:  # Change to >= to count contiguous regions
-                    # Add the region to the binary mask
-                    filtered_mask_plane[labels_plane == region.label] = True
-                    
-                    # Extract contours for the current region
-                    contours = find_contours(filtered_mask_plane, 0.5)  # 0.5 is the level to find contours
-                    
-                    # Add contours to the viewer as polygons
-                    for contour in contours:
-                        viewer.add_shapes(contour, shape_type='polygon', edge_color='red', name=f'Contour Plane={z_index}')
+                if region.area >= min_puncta_size:
+                    coords = region.coords
+                    coords_2d = [(coord[0], coord[1]) for coord in coords]
 
-            # Add the binary mask to the viewer for the current plane
-            viewer.add_labels(filtered_mask_plane.astype(int), name=f'Thresh={num_stddevs} connect={min_puncta_size} Plane={z_index}')
+                    # Check if there are enough unique coordinates in 2D
+                    if len(coords_2d) >= 3 and len(set([coord[0] for coord in coords_2d])) > 1 and len(set([coord[1] for coord in coords_2d])) > 1:
+                        # Only compute convex hull if points span 2D
+                        hull = ConvexHull(coords_2d)
+                        # Reorder coordinates in the correct order for the polygon
+                        ordered_coords = [[z_index, coord[0], coord[1]] for i in hull.vertices for coord in [coords_2d[i]]]
+                        # Add the ordered contour as a polygon layer in Napari
+                        shapes_layer.add(
+                            ordered_coords, 
+                            shape_type="polygon", 
+                            edge_width=0.1
+                        )
+                    # Add the region to the stacked label
+                    stacked_labels[z_index][labels_plane == region.label] = 1
 
-# Threshold normch4 to detect gephyrin puncta
-
-# # Label and save puncta ROIs
-# labels = label(puncta_mask)
-# props = regionprops(labels)
-
-# roi_save_path = 'puncta_rois.txt'
-# with open(roi_save_path, 'w') as f:
-#     for prop in props:
-#         f.write(f"{prop.bbox}\n")
-
-# print(f"ROIs saved to {roi_save_path}")
-
-# Display with napari
+# Add the normalized 4-channel image for reference
 viewer.add_image(image_with_normch4, name='Image with NormCh4')
 napari.run()
