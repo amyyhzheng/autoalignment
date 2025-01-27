@@ -115,31 +115,63 @@ def sort_points_clockwise(points):
     # Return the sorted points
     return points[sorted_indices]
 
-
 def get_polygon_outline(coords):
-    # Convert the input list of coordinates to a set for efficient lookup
-    coord_set = set(tuple(c) for c in coords)
+    if not coords:
+        return []
     
-    # Directions for checking neighbors: right, down, left, up
-    directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]
-    
-    outline = []
-    
-    # Step 1: Find boundary edges
-    for x, y in coords:
-        for dx, dy in directions:
-            nx, ny = x + dx, y + dy
-            if (nx, ny) not in coord_set:
-                # If the neighbor is not part of the shape (i.e., it's a 0), calculate the midpoint
-                mid_x = (x + nx) / 2.0
-                mid_y = (y + ny) / 2.0
-                outline.append([mid_x, mid_y])
+    try:
+        # Convert the input list of coordinates to a set for efficient lookup
+        coord_set = set(tuple(c) for c in coords)
+        
+        # Directions for checking neighbors: right, down, left, up
+        directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]
+        
+        outline = []
+        
+        # Step 1: Find boundary edges
+        for x, y in coords:
+            num_neighbors = []
+            for dx, dy in directions:
+                nx, ny = x + dx, y + dy
+                if (nx, ny) not in coord_set:
+                    # If the neighbor is not part of the shape (i.e., it's a 0), calculate the midpoint
+                    mid_x = (x + nx) / 2.0
+                    mid_y = (y + ny) / 2.0
+                    outline.append([mid_x, mid_y])
+                    num_neighbors.append([nx, ny])
+            if len(num_neighbors) == 2:
+                nx_sum = 0
+                ny_sum = 0
+                for neighbor in num_neighbors:
+                    nx_sum += neighbor[0]
+                    ny_sum += neighbor[1]
+                outline.append([nx_sum / len(num_neighbors), ny_sum / len(num_neighbors)])
 
-    # Step 2: Sort points in a clockwise or counter-clockwise order
-    outline = sorted(outline, key=lambda p: np.arctan2(p[1] - np.mean([pt[1] for pt in outline]), p[0] - np.mean([pt[0] for pt in outline])))
+            elif len(num_neighbors) == 3:
+                for i in range(len(num_neighbors)):
+                    for j in range(i+1, len(num_neighbors)):
+                        dx1, dy1 = num_neighbors
+            #     across_neighbors = []
+            #     for i in range(len(num_neighbors)):
+            #         for j in range(i + 1, len(num_neighbors)):
+            #             dx1, dy1 = num_neighbors[i][0] - x, num_neighbors[i][1] - y
+            #             dx2, dy2 = num_neighbors[j][0] - x, num_neighbors[j][1] - y
+                        
+            #             if dx1 != -dx2 or dy1 != -dy2:
+            #                 # If they are not opposite, calculate the average of the two neighbors
+            #                 avg_nx = (num_neighbors[i][0] + num_neighbors[j][0]) / 2.0
+            #                 avg_ny = (num_neighbors[i][1] + num_neighbors[j][1]) / 2.0
+            #                 outline.append([avg_nx, avg_ny])
+        
+        # Step 2: Sort points in a clockwise or counter-clockwise order
+        if outline:
+            outline = sorted(outline, key=lambda p: np.arctan2(p[1] - np.mean([pt[1] for pt in outline]), p[0] - np.mean([pt[0] for pt in outline])))
+        
+        return outline
     
-    # Step 3: Return the ordered list of outline points (polygon vertices)
-    return outline
+    except Exception as e:
+        print(f"Error: {e}")
+        return []
 # Loop over threshold and minimum puncta size combinations
 for num_stddevs in range(2, 3):
     threshold = mean_intensity + num_stddevs * std_intensity
