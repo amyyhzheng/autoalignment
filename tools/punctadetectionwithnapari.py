@@ -2,7 +2,7 @@ import tifffile as tiff
 import numpy as np
 from skimage.io import imsave
 from skimage.filters import threshold_otsu
-from skimage.measure import label, regionprops
+from skimage.measure import label, regionprops, find_contours
 from skimage.segmentation import clear_border
 from skimage.morphology import remove_small_objects
 import napari
@@ -10,7 +10,7 @@ import napari
 viewer = napari.Viewer()
 
 # Path to your 3-channel TIFF image
-image_path = r"Z:\Amy\files_for_amy_fromJoe\example_analysis_SOM022\Automated_Puncta_Detection\Image1\With_normch4-SOM022_Image 1_MotionCorrected.tif"
+image_path = '/Users/amyzheng/Desktop/9994 VS Cell 1 Mt 550 at 915_V0_P_STACK.tif'
 # Load the image
 image = tiff.imread(image_path)
 print(image.shape)
@@ -90,32 +90,40 @@ print(f"Mean intensity: {mean_intensity}")
 print(f"Standard deviation: {std_intensity}")
 
 # Define threshold for gephyrin puncta
-for num_stddevs in range(0, 3):
+for num_stddevs in range(0, 1):
     threshold = mean_intensity + num_stddevs * std_intensity
-    for min_puncta_size in range(3, 8):
-        # Apply threshold to create a binary mask
-        puncta_mask = normch4_dendrites > threshold
-        puncta_mask = clear_border(puncta_mask)
-        
-        # Label the connected components
-        labels = label(puncta_mask)
-        
-        # Create a binary mask for the filtered components
-        filtered_mask = np.zeros_like(labels, dtype=bool)
-        for region in regionprops(labels):
-            if region.area == min_puncta_size:
-                # Add the region to the binary mask
-                filtered_mask[labels == region.label] = True
+    for min_puncta_size in range(4, 5):
+        # Label the connected components for each plane separately
+        for z_index in range(z):  # Iterate through each plane
+            # Create a binary mask for the current plane
+            puncta_mask_plane = normch4_dendrites[z_index] > threshold
+            puncta_mask_plane = clear_border(puncta_mask_plane)
+            
+            # Label the connected components in the current plane
+            labels_plane = label(puncta_mask_plane)
+            
+            # Create a binary mask for the filtered components in the current plane
+            filtered_mask_plane = np.zeros_like(labels_plane, dtype=bool)
+            for region in regionprops(labels_plane):
+                if region.area >= min_puncta_size:  # Change to >= to count contiguous regions
+                    # Add the region to the binary mask
+                    filtered_mask_plane[labels_plane == region.label] = True
+                    
+                    # Extract contours for the current region
+                    contours = find_contours(filtered_mask_plane, 0.5)  # 0.5 is the level to find contours
+                    
+                    # Add contours to the viewer as polygons
+                    for contour in contours:
+                        viewer.add_shapes(contour, shape_type='polygon', edge_color='red', name=f'Contour Plane={z_index}')
 
-        # Add the binary mask to the viewer
-        viewer.add_labels(filtered_mask.astype(int), name=f'Thresh={num_stddevs} connect={min_puncta_size}')
-
+            # Add the binary mask to the viewer for the current plane
+            viewer.add_labels(filtered_mask_plane.astype(int), name=f'Thresh={num_stddevs} connect={min_puncta_size} Plane={z_index}')
 
 # Threshold normch4 to detect gephyrin puncta
 
-# Label and save puncta ROIs
-labels = label(puncta_mask)
-props = regionprops(labels)
+# # Label and save puncta ROIs
+# labels = label(puncta_mask)
+# props = regionprops(labels)
 
 # roi_save_path = 'puncta_rois.txt'
 # with open(roi_save_path, 'w') as f:
