@@ -7,7 +7,7 @@ from skimage.segmentation import clear_border
 from skimage.morphology import remove_small_objects
 import napari
 from scipy.spatial import ConvexHull
-
+from skimage.morphology import binary_erosion, dilation, square
 
 viewer = napari.Viewer()
 
@@ -101,7 +101,45 @@ shapes_layer = viewer.add_shapes(
     face_color="transparent", 
     shape_type="polygon"
 )
+# Function to sort points clockwise or counterclockwise
+def sort_points_clockwise(points):
+    # Calculate the centroid of the points
+    centroid = np.mean(points, axis=0)
 
+    # Calculate the angle of each point relative to the centroid
+    angles = np.arctan2(points[:, 1] - centroid[1], points[:, 0] - centroid[0])
+
+    # Sort the points based on the angles
+    sorted_indices = np.argsort(angles)
+    
+    # Return the sorted points
+    return points[sorted_indices]
+
+
+def get_polygon_outline(coords):
+    # Convert the input list of coordinates to a set for efficient lookup
+    coord_set = set(tuple(c) for c in coords)
+    
+    # Directions for checking neighbors: right, down, left, up
+    directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]
+    
+    outline = []
+    
+    # Step 1: Find boundary edges
+    for x, y in coords:
+        for dx, dy in directions:
+            nx, ny = x + dx, y + dy
+            if (nx, ny) not in coord_set:
+                # If the neighbor is not part of the shape (i.e., it's a 0), calculate the midpoint
+                mid_x = (x + nx) / 2.0
+                mid_y = (y + ny) / 2.0
+                outline.append([mid_x, mid_y])
+
+    # Step 2: Sort points in a clockwise or counter-clockwise order
+    outline = sorted(outline, key=lambda p: np.arctan2(p[1] - np.mean([pt[1] for pt in outline]), p[0] - np.mean([pt[0] for pt in outline])))
+    
+    # Step 3: Return the ordered list of outline points (polygon vertices)
+    return outline
 # Loop over threshold and minimum puncta size combinations
 for num_stddevs in range(2, 3):
     threshold = mean_intensity + num_stddevs * std_intensity
@@ -118,23 +156,40 @@ for num_stddevs in range(2, 3):
             # Filter regions and add polygons
             for region in regionprops(labels_plane):
                 if region.area >= min_puncta_size:
+            # Create a binary mask of the current region
+                    region_mask = labels_plane == region.label
+
+                    # Perform erosion to shrink the region slightly
+                    eroded_mask = binary_erosion(region_mask)
+
+                    # Detect boundaries: subtract eroded mask from the original mask to get the boundary
+                    boundary_mask = region_mask & ~eroded_mask
+                    # 1. Dilate the boundary mask by 1 pixel (expand the area outward)
+                    dilated_mask = dilation(region_mask)
+                    outside_boundary_mask = dilated_mask & ~region_mask
+
+                    # 2. Subtract the original boundary mask from the dilated mask to get the boundary frame
+                    # # Use dilation to extend the boundary pixels to the edges between neighboring pixels
+                    # boundary_mask = dilation(boundary_mask)
+
+                    # Extract coordinates of the boundary pixels
+                    # boundary_coords = np.argwhere(boundary_mask)
+                    new_mask =outside_boundary_mask
+                    boundary_coords = np.argwhere(new_mask)
                     coords = region.coords
                     coords_2d = [(coord[0], coord[1]) for coord in coords]
+                    boundary = get_polygon_outline(coords_2d)
+                    # boundary_sorted = sort_points_clockwise(boundary)
+                    boundary_sorted = boundary
+                    # Shift the coordinates to align with the pixel edges (half-pixel shift)
+                    boundary_coords_3d = [[z_index, coord[0] , coord[1]] for coord in boundary_sorted]
+   
 
-                    # Check if there are enough unique coordinates in 2D
-                    if len(coords_2d) >= 3 and len(set([coord[0] for coord in coords_2d])) > 1 and len(set([coord[1] for coord in coords_2d])) > 1:
-                        # Only compute convex hull if points span 2D
-                        hull = ConvexHull(coords_2d)
-                        # Reorder coordinates in the correct order for the polygon
-                        ordered_coords = [[z_index, coord[0], coord[1]] for i in hull.vertices for coord in [coords_2d[i]]]
-                        # Add the ordered contour as a polygon layer in Napari
-                        shapes_layer.add(
-                            ordered_coords, 
-                            shape_type="polygon", 
-                            edge_width=0.1
-                        )
-                    # Add the region to the stacked label
                     stacked_labels[z_index][labels_plane == region.label] = 1
+                    shapes_layer.add(boundary_coords_3d, shape_type="polygon", edge_width=0.1)
+                    
+        layer_name = f'Thresh={num_stddevs}_MinSize={min_puncta_size}'
+        viewer.add_labels(stacked_labels, name=layer_name)
 
 # Add the normalized 4-channel image for reference
 viewer.add_image(image_with_normch4, name='Image with NormCh4')
