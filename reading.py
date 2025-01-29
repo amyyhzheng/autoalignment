@@ -1,13 +1,24 @@
-    def label_points(event):
-        current_num_points = len(points_layer.data)
-        num_existing_labels = len(points_layer.features['label'])
 
-        if current_num_points > num_existing_labels:
-            new_labels = np.arange(num_existing_labels + 1, current_num_points + 1)
-            points_layer.features['label'] = np.append(points_layer.features['label'], new_labels)
+    filetype_str = '.I16'
+    
+    # Get all .I16 files
+    files = [f for f in os.listdir(path_) if f.endswith(filetype_str)]
+    
+    # Extract (prefix, Z number) pairs
+    file_tuples = []
+    pattern = re.compile(r'^(.*_Z)(\d+)(\.I16)$')
 
-            # Refresh after updating the labels
-            points_layer.refresh()
+    for filename in files:
+        match = pattern.match(filename)
+        if match:
+            prefix, z_num, ext = match.groups()
+            file_tuples.append((prefix, int(z_num), ext))  # Store Z-number as an integer
 
-        print(f"Updated Labels: {points_layer.features['label']}")
-    return label_points
+    # Sort files by (prefix, Z-number)
+    file_tuples.sort(key=lambda x: (x[0], x[1]))
+
+    # Reconstruct filenames in correct order
+    ordered_file_list = [f"{prefix}{z_num}{ext}" for prefix, z_num, ext in file_tuples]
+
+    print(ordered_file_list)
+    return ordered_file_list
