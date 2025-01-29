@@ -199,7 +199,67 @@ def add_analyzed_and_unanalyzed_curves(viewer, coordinates, branch_numbers, synt
             name='Unanalyzed Branch Curves', 
             blending = 'additive'
         )
-        
+
+def process_and_add_splines(file_path, viewer, num_points=100):
+    """
+    Processes a CSV file, interpolates branch data using splines, and adds the results to a napari viewer.
+
+    Parameters:
+        file_path (str): Path to the CSV file containing branch data.
+        viewer (napari.Viewer): An instance of the napari viewer.
+        num_points (int): Number of points to interpolate per branch. Default is 100.
+
+    Returns:
+        None
+    """
+    def interpolate_branch(data):
+        """
+        Interpolates a spline for the given data.
+
+        Parameters:
+            data (DataFrame): DataFrame containing 'X', 'Y', 'Z' columns for a branch.
+
+        Returns:
+            np.ndarray: Array of interpolated points (shape: num_points x 3).
+        """
+        z_scale = 4
+        x, y, z = data['x'].values, data['y'].values, data['z'].values
+        z= z * z_scale
+        try:
+            # Fit a spline to the data
+            tck, u = splprep([x, y, z], s=0)
+            u_new = np.linspace(0, 1, num_points)
+            x_new, y_new, z_new = splev(u_new, tck)
+            return np.stack([ x_new, y_new, z_new], axis=1)  # Return as an array
+        except Exception as e:
+            print(f"Interpolation failed for branch: {e}")
+            return None
+
+    # Load the CSV file
+    df = pd.read_csv(file_path)
+
+    # Group by branch and interpolate
+    all_curves = []
+    for branch, group in df.groupby('path'):
+        print(f"Processing branch: {branch}")
+        interpolated = interpolate_branch(group)
+        if interpolated is not None:
+            all_curves.append(interpolated)  # Append the interpolated points
+
+    # Add the fitted curves as a layer to the viewer
+    if all_curves:
+        viewer.add_shapes(
+            all_curves,
+            shape_type='path',
+            edge_color='cyan',  # Customizable
+            edge_width=0.5,
+            name='Spline Fitted Curves',
+            blending='additive',
+            opacity=0.7  # Optional opacity
+        )
+        print("Fitted curves added to viewer.")
+    else:
+        print("No valid curves to add to the viewer.")
 
 def main():
     print('running')
