@@ -1,24 +1,34 @@
+    # ordered_file_list = []
 
-filetype_str = '.I16'
+    # filetype_str = '.I16'
+    # start_image = 'Z0.I16'
+    # for filename in os.listdir(path_):
+    #     if start_image in filename:
+    #         idx = filename.find(filetype_str)
+    #         file_prefix = filename[:idx-1]
+    #         i=0
+    #         while True:
+    #             check_filename = f'{file_prefix}{i}{filetype_str}'
+    #             if os.path.exists(os.path.join(path_, check_filename)):
+    #                 i+=1
+    #                 #print(check_filename in ordered_file_list)
+    #                 if check_filename not in ordered_file_list:
+    #                     ordered_file_list.append(check_filename)
+    #             else:
+    #                 break
+    # for filename in os.listdir(path_):
+    #     if filetype_str in filename:
+    #         i=0
+    #         idx = filename.find(filetype_str)
+    #         file_prefix = filename[:idx-1]
+    #         while True:
+    #             check_filename = f'{file_prefix}{i}{filetype_str}'
+    #             if os.path.exists(os.path.join(path_, check_filename)):
+    #                 i+=1
+    #                 #print(check_filename in ordered_file_list)
+    #                 if check_filename not in ordered_file_list:
+    #                     ordered_file_list.append(check_filename)
+    #             else:
+    #                 break
 
-# Get all .I16 files
-files = [f for f in os.listdir(path_) if f.endswith(filetype_str)]
-
-# Extract (prefix, Z number) pairs
-file_tuples = []
-pattern = re.compile(r'^(.*_Z)(\d+)(\.I16)$')
-
-for filename in files:
-    match = pattern.match(filename)
-    if match:
-        prefix, z_num, ext = match.groups()
-        file_tuples.append((prefix, int(z_num), ext))  # Store Z-number as an integer
-
-# Sort files by (prefix, Z-number)
-file_tuples.sort(key=lambda x: (x[0], x[1]))  # Numeric sorting
-
-# Reconstruct filenames in correct order
-ordered_file_list = [f"{prefix}{z_num}{ext}" for prefix, z_num, ext in file_tuples]
-
-print(ordered_file_list)
-return ordered_file_list
+    # print(ordered_file_list)
