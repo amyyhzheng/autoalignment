@@ -1,3 +1,4 @@
+def get_i16_file_dict(folder_path):
     # Check if the folder exists
     if not os.path.exists(folder_path):
         return {}
@@ -29,4 +30,4 @@
     for key in sorted_dict:
         print(f"{key}: {sorted_dict[key]}")  # This should show sorted integer keys
 
-    return file_dict.values()
+    return sorted_dict.values()
