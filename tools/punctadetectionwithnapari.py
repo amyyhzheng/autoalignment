@@ -9,6 +9,11 @@ import napari
 from scipy.spatial import ConvexHull
 from skimage.morphology import binary_erosion, dilation, square
 
+
+''''
+Run with python 3.10.11 interpreter (control shift P - Python:Select Interpreter)
+
+'''
 viewer = napari.Viewer()
 
 # Path to your 3-channel TIFF image
@@ -95,12 +100,7 @@ print(f"Standard deviation: {std_intensity}")
 stacked_labels = np.zeros((z, x, y), dtype=int)
 
 # Create a shapes layer for polygons
-shapes_layer = viewer.add_shapes(
-    name="Detected Regions", 
-    edge_color="red", 
-    face_color="transparent", 
-    shape_type="polygon"
-)
+
 # Function to sort points clockwise or counterclockwise
 def sort_points_clockwise(points):
     # Calculate the centroid of the points
@@ -115,67 +115,103 @@ def sort_points_clockwise(points):
     # Return the sorted points
     return points[sorted_indices]
 
-def get_polygon_outline(coords):
-    if not coords:
-        return []
+# def get_polygon_outline(coords):
+#     if not coords:
+#         return []
     
-    try:
-        # Convert the input list of coordinates to a set for efficient lookup
-        coord_set = set(tuple(c) for c in coords)
+#     try:
+#         # Convert the input list of coordinates to a set for efficient lookup
+#         coord_set = set(tuple(c) for c in coords)
         
-        # Directions for checking neighbors: right, down, left, up
-        directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]
+#         # Directions for checking neighbors: right, down, left, up
+#         directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]
         
-        outline = []
+#         outline = []
         
-        # Step 1: Find boundary edges
-        for x, y in coords:
-            num_neighbors = []
-            for dx, dy in directions:
-                nx, ny = x + dx, y + dy
-                if (nx, ny) not in coord_set:
-                    # If the neighbor is not part of the shape (i.e., it's a 0), calculate the midpoint
-                    mid_x = (x + nx) / 2.0
-                    mid_y = (y + ny) / 2.0
-                    outline.append([mid_x, mid_y])
-                    num_neighbors.append([nx, ny])
-            if len(num_neighbors) == 2:
-                nx_sum = 0
-                ny_sum = 0
-                for neighbor in num_neighbors:
-                    nx_sum += neighbor[0]
-                    ny_sum += neighbor[1]
-                outline.append([nx_sum / len(num_neighbors), ny_sum / len(num_neighbors)])
+#         # Step 1: Find boundary edges
+#         for x, y in coords:
+#             num_neighbors = []
+#             for dx, dy in directions:
+#                 nx, ny = x + dx, y + dy
+#                 if (nx, ny) not in coord_set:
+#                     # If the neighbor is not part of the shape (i.e., it's a 0), calculate the midpoint
+#                     mid_x = (x + nx) / 2.0
+#                     mid_y = (y + ny) / 2.0
+#                     outline.append([mid_x, mid_y])
+#                     num_neighbors.append([nx, ny])
+#             if len(num_neighbors) == 2:
+#                 nx_sum = 0
+#                 ny_sum = 0
+#                 for neighbor in num_neighbors:
+#                     nx_sum += neighbor[0]
+#                     ny_sum += neighbor[1]
+#                 outline.append([nx_sum / len(num_neighbors), ny_sum / len(num_neighbors)])
 
-            elif len(num_neighbors) == 3:
-                for i in range(len(num_neighbors)):
-                    for j in range(i+1, len(num_neighbors)):
-                        dx1, dy1 = num_neighbors
-            #     across_neighbors = []
-            #     for i in range(len(num_neighbors)):
-            #         for j in range(i + 1, len(num_neighbors)):
-            #             dx1, dy1 = num_neighbors[i][0] - x, num_neighbors[i][1] - y
-            #             dx2, dy2 = num_neighbors[j][0] - x, num_neighbors[j][1] - y
+#             # elif len(num_neighbors) == 3:
+#             #     for i in range(len(num_neighbors)):
+#             #         for j in range(i+1, len(num_neighbors)):
+#             #             dx1, dy1 = num_neighbors
+#             #     across_neighbors = []
+#             #     for i in range(len(num_neighbors)):
+#             #         for j in range(i + 1, len(num_neighbors)):
+#             #             dx1, dy1 = num_neighbors[i][0] - x, num_neighbors[i][1] - y
+#             #             dx2, dy2 = num_neighbors[j][0] - x, num_neighbors[j][1] - y
                         
-            #             if dx1 != -dx2 or dy1 != -dy2:
-            #                 # If they are not opposite, calculate the average of the two neighbors
-            #                 avg_nx = (num_neighbors[i][0] + num_neighbors[j][0]) / 2.0
-            #                 avg_ny = (num_neighbors[i][1] + num_neighbors[j][1]) / 2.0
-            #                 outline.append([avg_nx, avg_ny])
+#             #             if dx1 != -dx2 or dy1 != -dy2:
+#             #                 # If they are not opposite, calculate the average of the two neighbors
+#             #                 avg_nx = (num_neighbors[i][0] + num_neighbors[j][0]) / 2.0
+#             #                 avg_ny = (num_neighbors[i][1] + num_neighbors[j][1]) / 2.0
+#             #                 outline.append([avg_nx, avg_ny])
         
-        # Step 2: Sort points in a clockwise or counter-clockwise order
-        if outline:
-            outline = sorted(outline, key=lambda p: np.arctan2(p[1] - np.mean([pt[1] for pt in outline]), p[0] - np.mean([pt[0] for pt in outline])))
+#         # Step 2: Sort points in a clockwise or counter-clockwise order
+#         if outline:
+#             outline = sorted(outline, key=lambda p: np.arctan2(p[1] - np.mean([pt[1] for pt in outline]), p[0] - np.mean([pt[0] for pt in outline])))
         
-        return outline
+#         return outline
     
-    except Exception as e:
-        print(f"Error: {e}")
-        return []
+#     except Exception as e:
+#         print(f"Error: {e}")
+#         return []
+
+
+def get_expanded_bounding_box(region):
+    minr, minc, maxr, maxc = region.bbox
+    return (minr - 1, minc - 1, maxr + 1, maxc + 1)
+
+def get_all_half_grid_points(region):
+    """Generates all 0.5 offset points inside the expanded bounding box."""
+    minr, minc, maxr, maxc = get_expanded_bounding_box(region)
+
+    # Create a grid of 0.5-aligned points
+    r_vals = np.arange(minr - 0.5, maxr + 1, 1)
+    c_vals = np.arange(minc - 0.5, maxc + 1, 1)
+
+    # Generate all (row, col) pairs
+    corners = [(r, c) for r in r_vals for c in c_vals]
+    
+    return corners
+
+def filter_corners(region, binary_mask, coords):
+    minr, minc, maxr, maxc = get_expanded_bounding_box(region)
+    corners = get_corners(region)
+    filtered_corners = []
+    
+    for r, c in corners:
+        if not ((r, c) in coords and binary_mask[int(r), int(c)] and binary_mask[int(r-1), int(c-1)]):
+            filtered_corners.append((r, c))
+    
+    return filtered_corners
+
 # Loop over threshold and minimum puncta size combinations
-for num_stddevs in range(2, 3):
+for num_stddevs in range(1, 2):
     threshold = mean_intensity + num_stddevs * std_intensity
-    for min_puncta_size in range(4, 5):
+    for min_puncta_size in range(3, 5):
+        shapes_layer = viewer.add_shapes(
+            name=f'Thresh={num_stddevs}_MinSize={min_puncta_size}', 
+            edge_color="red", 
+            face_color="transparent", 
+            shape_type="polygon"
+        )
         # Process each z-plane separately
         for z_index in range(z):
             # Create a binary mask for the current plane
@@ -191,14 +227,14 @@ for num_stddevs in range(2, 3):
             # Create a binary mask of the current region
                     region_mask = labels_plane == region.label
 
-                    # Perform erosion to shrink the region slightly
-                    eroded_mask = binary_erosion(region_mask)
+                    # # Perform erosion to shrink the region slightly
+                    # eroded_mask = binary_erosion(region_mask)
 
-                    # Detect boundaries: subtract eroded mask from the original mask to get the boundary
-                    boundary_mask = region_mask & ~eroded_mask
-                    # 1. Dilate the boundary mask by 1 pixel (expand the area outward)
-                    dilated_mask = dilation(region_mask)
-                    outside_boundary_mask = dilated_mask & ~region_mask
+                    # # Detect boundaries: subtract eroded mask from the original mask to get the boundary
+                    # boundary_mask = region_mask & ~eroded_mask
+                    # # 1. Dilate the boundary mask by 1 pixel (expand the area outward)
+                    # dilated_mask = dilation(region_mask)
+                    # outside_boundary_mask = dilated_mask & ~region_mask
 
                     # 2. Subtract the original boundary mask from the dilated mask to get the boundary frame
                     # # Use dilation to extend the boundary pixels to the edges between neighboring pixels
@@ -206,8 +242,8 @@ for num_stddevs in range(2, 3):
 
                     # Extract coordinates of the boundary pixels
                     # boundary_coords = np.argwhere(boundary_mask)
-                    new_mask =outside_boundary_mask
-                    boundary_coords = np.argwhere(new_mask)
+                    # new_mask =outside_boundary_mask
+                    # boundary_coords = np.argwhere(new_mask)
                     coords = region.coords
                     coords_2d = [(coord[0], coord[1]) for coord in coords]
                     boundary = get_polygon_outline(coords_2d)
