@@ -52,7 +52,7 @@ import tifffile as tif
 import matplotlib.pyplot as plt 
 from collections import defaultdict
 
-
+from visualization import process_and_add_splines
 
 """"""""""""""""""""""""""""""""""""""""""
 """      SECTION #1: COMPUTATIONAL     """
@@ -1205,7 +1205,7 @@ def load_fourchannel_image(image_path, image_name, viewer):
     viewer.add_image(ch1, name = f'Gephyrin {image_name}', colormap = 'green', blending = 'additive')
     viewer.add_image(ch2, name = f'RFP {image_name}', colormap = 'cyan', blending = 'additive')
     viewer.add_image(ch3, name = f'Cell Fill {image_name}', colormap = 'gray', blending = 'additive')
-    viewer.add_image(ch4, name = f'Bassoon {image_name}', colormap = 'yellow', blending = 'additive')
+    viewer.add_image(ch4, name = f'Bassoon {image_name}', colormap ='orange', blending = 'additive')
 
 def testResults(actual_csv_path, predicted_csv_list):
     '''
@@ -1506,6 +1506,8 @@ testing_csv = shaft_clusters_csv + spine_clusters_csv
 #Running TESTING HERE
 print('started testing')
 metrics = testResults('/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/PunctaScoring/b2/SynapseMarkers/Aligned_afterManualCheck/CombinedResults.csv', testing_csv)
+for filename in xyz_fileNames.values():
+    process_and_add_splines(filename, metrics)
 napari.run()
 print(metrics)
 print('finished testing')
