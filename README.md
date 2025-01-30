@@ -12,3 +12,6 @@ run all python files individually, then run main.py last. When making local chan
 - layer_utils: Can add more. Currently only contains the consecutive number handling
 - widgets.py: Contains all of the widgets.
 - main.py: Run the file here. Also edit image paths here. 
+
+**Puncta Detection**
+- likely most efficient as of 1/30 to export all of the detected puncta and re upload/drag them into labeling software
