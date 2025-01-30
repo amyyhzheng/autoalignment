@@ -1,4 +1,3 @@
-
 ''' README
 There are three sections to this entire alignment code: 1.) computational 2.) clustering 3.) mapping
 1.) Computational: This part gets the raw branch and marker information. The raw data is then processed (i.e. normalized, converted from pixels to um).
@@ -53,6 +52,7 @@ import matplotlib.pyplot as plt
 from collections import defaultdict
 
 from visualization import process_and_add_splines
+from scipy.interpolate import splprep, splev
 
 """"""""""""""""""""""""""""""""""""""""""
 """      SECTION #1: COMPUTATIONAL     """
@@ -122,11 +122,39 @@ def getBranchCoordinates(xyz_fileNames, branch_ID):
         file_path = xyz_fileNames['Timepoint ' + str(timepoint+1)]
         file = pd.read_csv(file_path)
         branch = file.loc[file['path'] == SNT_branchName%branch_ID] 
-        for i in range(len(branch)):
-            x = branch["x"].iloc[i]
-            y = branch["y"].iloc[i]
-            z = branch["z"].iloc[i]
-            timepoint_list.append(tuple([x, y, z]))
+
+        # for i in range(len(branch)):
+        #     x = branch["x"].iloc[i]
+        #     y = branch["y"].iloc[i]
+        #     z = branch["z"].iloc[i]
+        #     timepoint_list.append(tuple([x, y, z]))
+            # Fit spline
+        x, y, z = branch["x"].values, branch["y"].values, branch["z"].values
+        tck, u = splprep([x, y, z], s=0)
+        u_new = np.linspace(0, 1, 100)
+        x_new, y_new, z_new = splev(u_new, tck)
+        timepoint_list = list(zip(x_new, y_new, z_new))
+        '''
+        Changed to include all of
+        '''
+
+        # Store results
+        # timepoint_list.append(formatted)
+
+
+    #         # Check if there are enough points for spline (we need at least 2)
+    # if points.shape[0] > 1:
+    #     tck, u = splprep(points.T, s=0)  # Compute B-spline representation
+    #     u_new = np.linspace(0, 1, num=10)  # Interpolation with 10 points
+    #     x_new, y_new, z_new = splev(u_new, tck)  # Evaluate spline
+
+    #     # Stack in z-x-y order
+    #     interpolated_points = np.stack([z_new, x_new, y_new], axis=1)
+    # else:
+    #     interpolated_points = points  # If only one point, keep it as is
+
+    # timepoint_list.append(interpolated_points)
+
         raw_branch_coordinates.append(timepoint_list)
         print("Successfully saved " + str(len(timepoint_list)) + " branch coordinates in Timepoint " + str(timepoint+1))
     return raw_branch_coordinates
@@ -1251,11 +1279,13 @@ def testResults(actual_csv_path, predicted_csv_list):
     actual_all_labels = []
     actual_all_colors = []
     
-    # Lists to store all predicted points data (add these with other list declarations)
+    # Lists to store all predicted points data
     predicted_all_points = []
     predicted_all_labels = []
     predicted_all_colors = []
     
+    viewers = {}  # Dictionary to hold viewers for each image
+
     for image in range(1, 7):
         image_col = f'S{image}'
         final_col = f'Final S{image}'
@@ -1265,18 +1295,22 @@ def testResults(actual_csv_path, predicted_csv_list):
         
         image_name = f'Image{image}'
         
+        # Create a new viewer for each image
+        viewer = napari.Viewer(ndisplay=3)
+        viewers[image] = viewer
+        
         # Get actual markers
-        actual_coords = list(zip(df_actual[xpos_col], 
-                               df_actual[ypos_col],
-                               df_actual[zpos_col]))
+        actual_coords = list(zip(df_actual[zpos_col], 
+                               df_actual[xpos_col],
+                               df_actual[ypos_col]))
         actual_types = df_actual[final_col].tolist()
         actual_groups = df_actual['Marker'].tolist()  # Get actual group numbers
         
         # Collect actual points data (skipping NaN values)
         valid_rows = df_actual[~pd.isna(df_actual[final_col])]
-        coords = list(zip(valid_rows[xpos_col], 
-                         valid_rows[ypos_col],
-                         valid_rows[zpos_col]))
+        coords = list(zip(valid_rows[zpos_col], 
+                         valid_rows[xpos_col],
+                         valid_rows[ypos_col]))
         types = valid_rows[final_col].tolist()
         groups = valid_rows['Marker'].tolist()
         
@@ -1286,9 +1320,9 @@ def testResults(actual_csv_path, predicted_csv_list):
         
         # Get predicted markers
         pred_image = predicted_df[predicted_df['image'] == image_name]
-        pred_coords = list(zip(pred_image['x'],
-                             pred_image['y'], 
-                             pred_image['z']))
+        pred_coords = list(zip(pred_image['z'],
+                             pred_image['x'], 
+                             pred_image['y']))
         pred_types = pred_image['markerType'].tolist()
         pred_groups = pred_image['markerID'].tolist()  # Get predicted group numbers
         
@@ -1306,7 +1340,7 @@ def testResults(actual_csv_path, predicted_csv_list):
                 if not pred_matched[j] and str(actual_type).lower() == str(pred_type).lower():
                     # Calculate distance
                     dist = np.sqrt(sum((a - b) ** 2 for a, b in zip(actual_coord, pred_coord)))
-                    if dist <= 2.0:  # 2μm threshold
+                    if dist <= 5.0:  # 2μm threshold
                         correct_points.append(pred_coord)
                         correct_labels.append(f"P{pred_groups[j]}/A{actual_groups[i]}")
                         actual_matched[i] = True
@@ -1337,10 +1371,10 @@ def testResults(actual_csv_path, predicted_csv_list):
                     'group': actual_groups[i]
                 })
         
-        # Collect predicted points data (add this after getting pred_image)
-        pred_coords = list(zip(pred_image['x'],
-                             pred_image['y'], 
-                             pred_image['z']))
+        # Collect predicted points data
+        pred_coords = list(zip(pred_image['z'],
+                             pred_image['x'], 
+                             pred_image['y']))
         pred_types = pred_image['markerType'].tolist()
         pred_groups = pred_image['markerID'].tolist()
         
@@ -1348,77 +1382,74 @@ def testResults(actual_csv_path, predicted_csv_list):
         predicted_all_points.extend(pred_coords)
         predicted_all_labels.extend([f"P{group}" for group in pred_groups])
         predicted_all_colors.extend([get_color(type_) for type_ in pred_types])
-    
-    # Create napari viewer
-    viewer = napari.Viewer(ndisplay=3)
-    
-    # Add actual points layer
-    if actual_all_points:
-        viewer.add_points(
-            actual_all_points,
-            size=10,
-            face_color=actual_all_colors,
-            name='Actual Points',
-            text={
-                'string': actual_all_labels,
-                'size': 10,
-                'color': 'white'
-            }
-        )
-    
-    # Add predicted points layer (new)
-    if predicted_all_points:
-        viewer.add_points(
-            predicted_all_points,
-            size=10,
-            face_color=predicted_all_colors,
-            name='Predicted Points',
-            text={
-                'string': predicted_all_labels,
-                'size': 10,
-                'color': 'white'
-            }
-        )
-    
-    # Add comparison layers
-    if correct_points:
-        viewer.add_points(
-            correct_points, 
-            size=10, 
-            face_color='green',
-            name='Correct Predictions',
-            text={
-                'string': correct_labels,
-                'size': 10,
-                'color': 'white'
-            }
-        )
-    
-    if incorrect_pred_points:
-        viewer.add_points(
-            incorrect_pred_points, 
-            size=10, 
-            face_color='red',
-            name='Incorrect Predictions',
-            text={
-                'string': incorrect_pred_labels,
-                'size': 10,
-                'color': 'white'
-            }
-        )
-    
-    if missed_actual_points:
-        viewer.add_points(
-            missed_actual_points, 
-            size=10, 
-            face_color='yellow',
-            name='Missed Actual Points',
-            text={
-                'string': missed_actual_labels,
-                'size': 10,
-                'color': 'white'
-            }
-        )
+        
+        # Add actual points layer to the viewer
+        if actual_all_points:
+            viewer.add_points(
+                actual_all_points,
+                size=10,
+                face_color=actual_all_colors,
+                name='Actual Points',
+                text={
+                    'string': actual_all_labels,
+                    'size': 10,
+                    'color': 'white'
+                }
+            )
+        
+        # Add predicted points layer to the viewer
+        if predicted_all_points:
+            viewer.add_points(
+                predicted_all_points,
+                size=10,
+                face_color=predicted_all_colors,
+                name='Predicted Points',
+                text={
+                    'string': predicted_all_labels,
+                    'size': 10,
+                    'color': 'white'
+                }
+            )
+        
+        # Add comparison layers
+        if correct_points:
+            viewer.add_points(
+                correct_points, 
+                size=10, 
+                face_color='green',
+                name='Correct Predictions',
+                text={
+                    'string': correct_labels,
+                    'size': 10,
+                    'color': 'white'
+                }
+            )
+        
+        if incorrect_pred_points:
+            viewer.add_points(
+                incorrect_pred_points, 
+                size=10, 
+                face_color='red',
+                name='Incorrect Predictions',
+                text={
+                    'string': incorrect_pred_labels,
+                    'size': 10,
+                    'color': 'white'
+                }
+            )
+        
+        if missed_actual_points:
+            viewer.add_points(
+                missed_actual_points, 
+                size=10, 
+                face_color='orange',
+                name='Missed Actual Points',
+                text={
+                    'string': missed_actual_labels,
+                    'size': 10,
+                    'color': 'white'
+                }
+            )
     
     # Print metrics
     total_actual = len(correct_points) + len(missed_actual_points)
@@ -1445,7 +1476,7 @@ def testResults(actual_csv_path, predicted_csv_list):
     for info in missed_actuals_info:
         print(f"Timepoint {info['timepoint']}: {info['type']} Group {info['group']} at coordinates {info['coordinates']}")
     
-    return viewer
+    return viewers  # Return the viewers for further use if needed
 
 ''' 
 Napari exports are grouped with Phoebe's CSV Exports below
@@ -1505,11 +1536,14 @@ export_cluster_csv = shaft_clusters_csv + spine_clusters_csv + landmark_csv
 testing_csv = shaft_clusters_csv + spine_clusters_csv 
 #Running TESTING HERE
 print('started testing')
-metrics = testResults('/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/PunctaScoring/b2/SynapseMarkers/Aligned_afterManualCheck/CombinedResults.csv', testing_csv)
-for filename in xyz_fileNames.values():
-    process_and_add_splines(filename, metrics)
+viewers = testResults('/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/PunctaScoring/b2/SynapseMarkers/Aligned_afterManualCheck/CombinedResults.csv', testing_csv)
+for iteration in zip(viewers.values(), xyz_fileNames.values()):
+    process_and_add_splines(iteration[1], iteration[0] )
+    image = tif.imread('/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/Automated_Puncta_Detection/Image1/SOM022_Image 1_MotionCorrected.tif')
+    ch1 = image[:, 0, :, :] 
+    iteration[0].add_image(ch1, scale = [4, 1, 1])
 napari.run()
-print(metrics)
+# print(metrics)
 print('finished testing')
 
 # napari_view(shaft_clusters_csv, "InhibitoryShaft", "Nothing", viewer_mapping)
