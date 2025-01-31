@@ -6,9 +6,10 @@ import sys
 import pandas as pd
 from magicgui import magicgui
 
-from constants import INITIAL_FEATURES, INITIAL_POINTS
+from constants import INITIAL_FEATURES, INITIAL_POINTS, EXCITATORY_TYPE_TO_COLOR, EXCITATORY_MAPPING_NAME
 from layer_utils import create_point_label_handler
 from typetocolor import TypeToColor
+
 
 class UpdatePointTypeWidget(QWidget):
     def __init__(self, viewer, points_layers, mapping_name):
@@ -233,7 +234,7 @@ class AddPointsLayerWidget(QWidget):
         }
         
         # Create handler for auto-incrementing labels
-        create_point_label_handler(points_layer)
+        create_point_label_handler(points_layer, self.viewer)
 
         # Set initial features for the layer
         points_layer.features = {
@@ -248,41 +249,52 @@ class AddPointsLayerWidget(QWidget):
 
         print(f"Added new points layer: {layer_name}")
 
+class CenterOnPointWidget(QWidget):
+    """Widget to center the viewer on a specific point in the active points layer."""
+    def __init__(self, viewer):
+        super().__init__()
+        self.viewer = viewer
 
-@magicgui(call_button="Center on Point")
-def go_to_point(viewer: napari.Viewer, point_number: int):
-    """
-    Center the viewer on the specified point in the currently selected points layer.
+        layout = QVBoxLayout()
+        self.label = QLabel("Enter Point Number:")
+        self.point_input = QLineEdit()
+        self.center_button = QPushButton("Center on Point")
+        self.center_button.clicked.connect(self.center_on_point)
 
-    Parameters:
-        viewer (napari.Viewer): The Napari viewer instance.
-        point_number (int): The label of the point to center on.
-    """
-    # Check for the active layer
-    active_layer = viewer.layers.selection.active
-    if not isinstance(active_layer, napari.layers.Points):
-        print("No points layer selected or active layer is not a Points layer.")
-        return
+        layout.addWidget(self.label)
+        layout.addWidget(self.point_input)
+        layout.addWidget(self.center_button)
+        self.setLayout(layout)
 
-    try:
-        # Retrieve the 'label' feature from the active points layer
-        labels = active_layer.features['label']
+    def center_on_point(self):
+        """Center the viewer on the specified point."""
+        try:
+            point_number = int(self.point_input.text())
+            active_layer = self.viewer.layers.selection.active
 
-        # Find the index of the specified label using a boolean condition
-        point_index = labels[labels == point_number].index[0]
+            if not isinstance(active_layer, napari.layers.Points):
+                QMessageBox.warning(self, "Error", "No active points layer selected.")
+                return
 
-        # Get the coordinates of the specified point
-        point_coords = active_layer.data[point_index]
-        print(f"Point coordinates: {point_coords}")
+            # Retrieve the 'label' feature from the active points layer
+            labels = active_layer.features['label']
+            point_index = labels[labels == point_number].index[0]
 
-        # Center the viewer's camera on the point
-        viewer.camera.center = (point_coords[0], point_coords[1], point_coords[2])  # Reverse order for camera
-        viewer.camera.zoom = 8  # Adjust zoom level as needed
+            # Get the coordinates of the specified point
+            point_coords = active_layer.data[point_index]
 
-        if len(point_coords) > 2:
-            viewer.dims.set_point(2, point_coords[2])  # Adjust for Z dimension if needed
-    except (IndexError, KeyError):
-        print("Point number not found in labels or 'label' feature is missing.")
+            # Center the viewer's camera on the X and Y axes
+            self.viewer.camera.center = (point_coords[0], point_coords[1])  
+            self.viewer.camera.zoom = 5  # Adjust zoom level as needed
+
+            # Handle the Z dimension separately
+            if len(point_coords) > 2:
+                self.viewer.dims.set_point(2, point_coords[2])  # Adjust the Z-dimension position
+
+        except ValueError:
+            QMessageBox.warning(self, "Error", "Please enter a valid integer for the point number.")
+        except (IndexError, KeyError):
+            QMessageBox.warning(self, "Error", "Point number not found or 'label' feature is missing.")
 
 class ZoomLevelWidget(QWidget):
     def __init__(self, viewer):
@@ -353,6 +365,99 @@ class AddPointsFromCSVWidget(QWidget):
             # Add the new layer to points_layers dictionary
             self.points_layers[layer_name] = points_layer
             create_point_label_handler(points_layer)
+            # Update the UpdatePointTypeWidget with the new layer
+            self.update_widget.points_layers = self.points_layers
+            self.update_widget.update_widget_for_active_layer(None)  # Force update
+
+            print(f"Loaded points layer from CSV: {layer_name}")
+        except Exception as e:
+            print(f"Error loading points layer from CSV: {e}")
+
+
+
+class AddPointsFromObjectJWidget(QWidget):
+    """Widget to load points layer data from a custom CSV file."""
+    def __init__(self, viewer, points_layers, update_widget):
+        super().__init__()
+        self.viewer = viewer
+        self.points_layers = points_layers
+        self.update_widget = update_widget
+
+        layout = QVBoxLayout()
+
+        self.load_button = QPushButton("Load Points Layer from ObjectJ")
+        self.load_button.clicked.connect(self.load_points_from_csv)
+        layout.addWidget(self.load_button)
+
+        self.setLayout(layout)
+
+    def load_points_from_csv(self):
+        """Load points layer from a custom CSV file."""
+        options = QFileDialog.Options()
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Select CSV File", "", "CSV Files (*.csv);;All Files (*)", options=options
+        )
+        if not file_path:
+            return  # User canceled the file dialog
+
+        try:
+            # Read the CSV file
+            df = pd.read_csv(file_path)
+
+            # Filter necessary columns and handle missing data
+            df = df.drop(columns=[col for col in df.columns if "Unnamed" in col], errors='ignore')
+
+            # Ensure 'X', 'Y', 'Z' columns are numeric and drop invalid rows
+            for col in ['X', 'Y', 'Z']:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+            df = df.dropna(subset=['X', 'Y', 'Z'])
+
+            # Extract the coordinates
+            points = df[['Z', 'Y', 'X']].to_numpy()
+            # Extract features and map to colors
+            # Extract types and map to colors
+
+            types = df['Session # 2'].fillna('-1').astype(str).to_numpy()
+            mapped_types = []
+            for t in types:
+                # Check for 'landmark' and handle it separately
+                if 'landmark' in t.lower():
+                    mapped_types.append('Landmark')  # Adjust if necessary
+                else:
+                    # Find the matching excitatory type based on the first character
+                    mapped_type = next(
+                        (key for key in EXCITATORY_TYPE_TO_COLOR if key.startswith(t[0] + ':')),
+                        '-1: Nothing'
+                    )
+                    mapped_types.append(mapped_type)
+
+            # # Map types to colors
+            # mapped_colors = TypeToColor.map_types_to_colors(mapped_types, EXCITATORY_MAPPING_NAME)
+
+
+            # Extract features (e.g., labels)
+            features = {
+                'label': df['Synapse number'].fillna('Unknown').astype(str).to_numpy(),
+                'type': mapped_types
+            }
+
+            # Add a new points layer
+            layer_name = f"Points Layer {len(self.points_layers) + 1}"
+            points_layer = self.viewer.add_points(
+                points,
+                features=features,
+                size=7,
+                edge_width=0.1,
+                border_color='white',
+                face_color= TypeToColor.map_types_to_colors(features['type'], self.update_widget.mapping_name),  # Default color for simplicity
+                text={'text': 'label', 'size': 10, 'color': 'white', 'anchor': 'center'},
+                name=layer_name,
+            )
+            print(mapped_types)
+
+            # Add the new layer to points_layers dictionary
+            self.points_layers[layer_name] = points_layer
+
             # Update the UpdatePointTypeWidget with the new layer
             self.update_widget.points_layers = self.points_layers
             self.update_widget.update_widget_for_active_layer(None)  # Force update
