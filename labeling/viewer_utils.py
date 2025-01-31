@@ -1,13 +1,19 @@
+# import napari
+# from constants import INITIAL_FEATURES, INITIAL_POINTS
+# from typetocolor import TypeToColor
+# from widgets import UpdatePointTypeWidget, CenterOnPointWidget, AddPointsFromCSVWidget, AddPointsLayerWidget, ZoomLevelWidget, AddPointsFromObjectJWidget
+# from layer_utils import create_point_label_handler
+# from constants import INHIBITORY_MAPPING_NAME, EXCITATORY_MAPPING_NAME, INHIBITORY_TYPE_TO_COLOR, EXCITATORY_TYPE_TO_COLOR
+
 import napari
 from constants import INITIAL_FEATURES, INITIAL_POINTS
 from typetocolor import TypeToColor
-from widgets import UpdatePointTypeWidget, go_to_point, AddPointsFromCSVWidget, AddPointsLayerWidget, ZoomLevelWidget
+from widgets import UpdatePointTypeWidget, CenterOnPointWidget, AddPointsFromCSVWidget, AddPointsLayerWidget, ZoomLevelWidget, AddPointsFromObjectJWidget
 from layer_utils import create_point_label_handler
 from constants import INHIBITORY_MAPPING_NAME, EXCITATORY_MAPPING_NAME, INHIBITORY_TYPE_TO_COLOR, EXCITATORY_TYPE_TO_COLOR
 from skimage.measure import label, regionprops
 from skimage.filters import threshold_otsu
 import numpy as np
-
 #TODO - Finish defining all for everything. Also maybe do default color mapping
 
 def ask_user_for_color_mapping():
@@ -36,26 +42,33 @@ def configure_viewer(viewer, image, viewer_index):
         print(f"Error during color mapping selection: {e}")
         return  # Exit if no mapping is selected
 
-    # Check the number of channels in the image
-    if image.shape[1] == 4:  # 4-channel image
-        # Assuming 'image' is a 4D array (samples, channels, height, width)
-        ch1, ch2, ch3, ch4 = image[:, 0, :, :], image[:, 1, :, :], image[:, 2, :, :], image[:, 3, :, :]
-        # Display images with the thresholding and colocalization results
-        viewer.add_image(ch1, name='Ch1: Gephyrin', blending='additive', colormap='green')
-        viewer.add_image(ch2, name='Ch2: RFP', blending='additive', colormap='cyan')
-        viewer.add_image(ch3, name='Ch3: Cell Fill', blending='additive', colormap='white')
-        viewer.add_image(ch4, name='Ch4: Bassoon', blending='additive', colormap='red')
-        # map_processing(ch1, ch2, ch3, ch4, viewer) #comment in this line to run automated puncta detection implemented as of 2024
-
-    elif image.shape[1] == 3:  # 3-channel image
+    if selected_mapping_name == EXCITATORY_MAPPING_NAME:
         ch1, ch2, ch3 = image[:, 0, :, :], image[:, 1, :, :], image[:, 2, :, :]
+        viewer.add_image(ch1, name='Ch1: Cell Fill', blending='additive', colormap='red', scale = [3.6, 1, 1])
+        viewer.layers['Ch1: Cell Fill'].contrast_limits = (3, 15)
+        viewer.add_image(ch2, name='Ch2: PSD95', blending='additive', colormap='cyan', scale = [3.6, 1, 1])
+        viewer.layers['Ch2: PSD95'].contrast_limits = (3, 15)
+        viewer.add_image(ch3, name='Ch3: Bouton', blending='additive', colormap='green', scale = [3.6, 1, 1])
+        viewer.layers['Ch3: Bouton'].contrast_limits = (3, 15)
+    # Check the number of channels in the image
+    elif image.shape[1] == 4:  # 4-channel image
+        ch1, ch2, ch3, ch4 = image[:, 0, :, :], image[:, 1, :, :], image[:, 2, :, :], image[:, 3, :, :]
         viewer.add_image(ch1, name='Ch1: RFP', blending='additive', colormap='cyan')
         viewer.add_image(ch2, name='Ch2: Gephyrin', blending='additive', colormap='green')
         viewer.add_image(ch3, name='Ch3: Cell Fill', blending='additive', colormap='white')
+        viewer.add_image(ch4, name='Ch4: Bassoon', blending='additive', colormap='red')
+        map_processing(ch1, ch2, ch3, ch4, viewer)
+    elif image.shape[1] == 3:  # 3-channel image
+        ch1, ch2, ch3 = image[:, 0, :, :], image[:, 1, :, :], image[:, 2, :, :]
+        viewer.add_image(ch1, name='Ch1: RFP', blending='additive', colormap='cyan', scale = [4, 1, 1])
+        viewer.add_image(ch2, name='Ch2: Gephyrin', blending='additive', colormap='green', scale = [4, 1, 1])
+        viewer.add_image(ch3, name='Ch3: Cell Fill', blending='additive', colormap='white', scale = [4, 1, 1]) 
+
+        # viewer.layers['Ch1: RFP'] = [4, 1, 1]
+        # viewer.layers['Ch2: Gephyrin'] = [4, 1, 1]
+        # viewer.layers['Ch3: Cell Fill'] = [4, 1, 1]
     else:
         raise ValueError(f"Unsupported number of channels: {image.shape[1]}")
-
-
 
     # Initialize points layers and UpdatePointTypeWidget
     points_layers = {}
@@ -66,7 +79,7 @@ def configure_viewer(viewer, image, viewer_index):
         edge_width=0.1,
         edge_color='white',
         face_color= TypeToColor.map_types_to_colors(['Default'], selected_mapping_name)[0],  # Set initial face color directly
-        text={'text': 'label', 'size': 10, 'color': 'white', 'anchor': 'center'},
+        text={'string': '{label}', 'size': 10, 'color': 'white', 'anchor': 'center'},
         name=f"Points Layer 1",
     )
     points_layers["Points Layer 1"] = points_layer
@@ -77,7 +90,7 @@ def configure_viewer(viewer, image, viewer_index):
     }
     # Set the face color property to use the feature
     points_layer.face_color_mode = 'direct'
-    lable_handler = create_point_label_handler(points_layer)
+    lable_handler = create_point_label_handler(points_layer, viewer)
 
     # Add UpdatePointTypeWidget
     update_widget = UpdatePointTypeWidget(viewer, points_layers, selected_mapping_name)
@@ -87,17 +100,20 @@ def configure_viewer(viewer, image, viewer_index):
     add_layer_widget = AddPointsLayerWidget(viewer, points_layers, update_widget)
     viewer.window.add_dock_widget(add_layer_widget, name="Add Points Layer")
 
-    # Add the go_to_point widget
-    viewer.window.add_dock_widget(go_to_point)
+    center_point_widget = CenterOnPointWidget(viewer)
+    viewer.window.add_dock_widget(center_point_widget, name = "Center On Point")
 
     # Add AddPointsFromCSVWidget
     add_csv_widget = AddPointsFromCSVWidget(viewer, points_layers, update_widget)
     viewer.window.add_dock_widget(add_csv_widget, name="Load Points from CSV")
 
+
     # Add ZoomLevelWidget
     zoom_widget = ZoomLevelWidget(viewer)
     viewer.window.add_dock_widget(zoom_widget, name="Zoom Level")
 
+    objectj_widget = AddPointsFromObjectJWidget(viewer, points_layers, update_widget)
+    viewer.window.add_dock_widget(objectj_widget, name = "Load Points from ObjectJ")
 def map_processing(ch1, ch2, ch3, ch4, viewer):
 
         # Thresholding Gephyrin (Ch1), Bassoon (Ch4), and Cell Fill (Ch3) channels using Otsu's method
