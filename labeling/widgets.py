@@ -364,7 +364,7 @@ class AddPointsFromCSVWidget(QWidget):
 
             # Add the new layer to points_layers dictionary
             self.points_layers[layer_name] = points_layer
-            create_point_label_handler(points_layer)
+            create_point_label_handler(points_layer, self.viewer)
             # Update the UpdatePointTypeWidget with the new layer
             self.update_widget.points_layers = self.points_layers
             self.update_widget.update_widget_for_active_layer(None)  # Force update
