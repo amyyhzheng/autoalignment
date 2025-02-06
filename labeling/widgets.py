@@ -284,12 +284,12 @@ class CenterOnPointWidget(QWidget):
             point_coords = active_layer.data[point_index]
 
             # Center the viewer's camera on the X and Y axes
-            self.viewer.camera.center = (point_coords[0], point_coords[1])  
+            self.viewer.camera.center = (point_coords[1], point_coords[2])  
             self.viewer.camera.zoom = 5  # Adjust zoom level as needed
 
             # Handle the Z dimension separately
             if len(point_coords) > 2:
-                self.viewer.dims.set_point(2, point_coords[2])  # Adjust the Z-dimension position
+                self.viewer.dims.set_point(2, point_coords[0])  # Adjust the Z-dimension position
 
         except ValueError:
             QMessageBox.warning(self, "Error", "Please enter a valid integer for the point number.")
