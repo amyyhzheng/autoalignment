@@ -166,6 +166,8 @@ def map_processing(ch1, ch2, ch3, ch4, viewer):
 def normalized_puncta(ch1, ch2, ch3, viewer):
     # Normalize channel 2 using channel 1
     z, x, y = ch1.shape
+
+    ch1_copy = ch1.copy()
     gephmultiplied = ch1*100
     # Testing image commented out
     # viewer.add_image(ch2multiplied)
@@ -178,10 +180,13 @@ def normalized_puncta(ch1, ch2, ch3, viewer):
 
     # Create a mask for dendrites based on brightness range in ch1
     dendrite_mask = (ch2 >= dendritemin) & (ch2 <= dendritemax)
+    geph_mask = ch1_copy >= 2
 
     # Apply the mask to normch4
     normch4_dendrites = np.where(dendrite_mask, normch4, 0)
+    normch4_gephyrin = np.where(geph_mask,normch4, 0 )
     viewer.add_image(normch4_dendrites,  blending='additive', scale = [4, 1, 1])
+    viewer.add_image(normch4_gephyrin,  blending='additive', scale = [4, 1, 1])
     # imsave('normch4_dendrites.tif', normch4_dendrites.astype(np.uint8))
 
     # Create a 4-channel image
