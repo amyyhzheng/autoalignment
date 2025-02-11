@@ -61,9 +61,9 @@ def configure_viewer(viewer, image, viewer_index):
         map_processing(ch1, ch2, ch3, ch4, viewer)
     elif image.shape[1] == 3:  # 3-channel image
         ch1, ch2, ch3 = image[:, 0, :, :], image[:, 1, :, :], image[:, 2, :, :]
-        viewer.add_image(ch1, name='Ch1: RFP', blending='additive', colormap='cyan', scale = [4, 1, 1])
-        viewer.add_image(ch2, name='Ch2: Gephyrin', blending='additive', colormap='green', scale = [4, 1, 1])
-        viewer.add_image(ch3, name='Ch3: Cell Fill', blending='additive', colormap='white', scale = [4, 1, 1]) 
+        viewer.add_image(ch1, name='Ch1: Gephyrin', blending='additive', colormap='green', scale = [4, 1, 1])
+        viewer.add_image(ch2, name='Ch2: Cell Fill', blending='additive', colormap='red', scale = [4, 1, 1])
+        viewer.add_image(ch3, name='Ch3: Syntd', blending='additive', colormap='cyan', scale = [4, 1, 1]) 
         #NORMALIZED PUNCTA DETECTION - comment in/out
         normalized_puncta(ch1, ch2, ch3, viewer)
         # viewer.layers['Ch1: RFP'] = [4, 1, 1]
@@ -166,10 +166,10 @@ def map_processing(ch1, ch2, ch3, ch4, viewer):
 def normalized_puncta(ch1, ch2, ch3, viewer):
     # Normalize channel 2 using channel 1
     z, x, y = ch1.shape
-    ch2multiplied = ch2*100
+    gephmultiplied = ch1*100
     # Testing image commented out
     # viewer.add_image(ch2multiplied)
-    normch4 = ch2multiplied/ch1
+    normch4 = gephmultiplied/ch2
     viewer.add_image(normch4, contrast_limits =(0, 80), scale = [4, 1, 1],  blending='additive' )
         
     # Define the brightness range for dendrites in channel 1
@@ -177,11 +177,11 @@ def normalized_puncta(ch1, ch2, ch3, viewer):
     dendritemax = 80
 
     # Create a mask for dendrites based on brightness range in ch1
-    dendrite_mask = (ch1 >= dendritemin) & (ch1 <= dendritemax)
+    dendrite_mask = (ch2 >= dendritemin) & (ch2 <= dendritemax)
 
     # Apply the mask to normch4
     normch4_dendrites = np.where(dendrite_mask, normch4, 0)
-    viewer.add_image(normch4_dendrites,  blending='additive')
+    viewer.add_image(normch4_dendrites,  blending='additive', scale = [4, 1, 1])
     # imsave('normch4_dendrites.tif', normch4_dendrites.astype(np.uint8))
 
     # Create a 4-channel image
@@ -198,7 +198,7 @@ def normalized_puncta(ch1, ch2, ch3, viewer):
 
         
     # Loop over threshold and minimum puncta size combinations -CHANGE HERE IF NEEDED
-    for num_stddevs in range(1, 2):
+    for num_stddevs in range(1, 3):
         threshold = mean_intensity + num_stddevs * std_intensity
         for min_puncta_size in range(3, 5):
                 # Initialize a 3D array for stacking filtered mask planes
