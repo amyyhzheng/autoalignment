@@ -64,6 +64,7 @@ def configure_viewer(viewer, image, viewer_index):
         viewer.add_image(ch1, name='Ch1: RFP', blending='additive', colormap='cyan', scale = [4, 1, 1])
         viewer.add_image(ch2, name='Ch2: Gephyrin', blending='additive', colormap='green', scale = [4, 1, 1])
         viewer.add_image(ch3, name='Ch3: Cell Fill', blending='additive', colormap='white', scale = [4, 1, 1]) 
+        #NORMALIZED PUNCTA DETECTION - comment in/out
         normalized_puncta(ch1, ch2, ch3, viewer)
         # viewer.layers['Ch1: RFP'] = [4, 1, 1]
         # viewer.layers['Ch2: Gephyrin'] = [4, 1, 1]
@@ -166,9 +167,10 @@ def normalized_puncta(ch1, ch2, ch3, viewer):
     # Normalize channel 2 using channel 1
     z, x, y = ch1.shape
     ch2multiplied = ch2*100
-    viewer.add_image(ch2multiplied)
+    # Testing image commented out
+    # viewer.add_image(ch2multiplied)
     normch4 = ch2multiplied/ch1
-    viewer.add_image(normch4, contrast_limits =(0, 80), scale = [4, 1, 1] )
+    viewer.add_image(normch4, contrast_limits =(0, 80), scale = [4, 1, 1],  blending='additive' )
         
     # Define the brightness range for dendrites in channel 1
     dendritemin = 10
@@ -179,7 +181,7 @@ def normalized_puncta(ch1, ch2, ch3, viewer):
 
     # Apply the mask to normch4
     normch4_dendrites = np.where(dendrite_mask, normch4, 0)
-    viewer.add_image(normch4_dendrites)
+    viewer.add_image(normch4_dendrites,  blending='additive')
     # imsave('normch4_dendrites.tif', normch4_dendrites.astype(np.uint8))
 
     # Create a 4-channel image
@@ -195,7 +197,7 @@ def normalized_puncta(ch1, ch2, ch3, viewer):
     print(f"Standard deviation: {std_intensity}")
 
         
-    # Loop over threshold and minimum puncta size combinations
+    # Loop over threshold and minimum puncta size combinations -CHANGE HERE IF NEEDED
     for num_stddevs in range(1, 2):
         threshold = mean_intensity + num_stddevs * std_intensity
         for min_puncta_size in range(3, 5):
@@ -218,4 +220,4 @@ def normalized_puncta(ch1, ch2, ch3, viewer):
                         stacked_labels[z_index][labels_plane == region.label] = 1
 
             layer_name = f'Thresh={num_stddevs}_MinSize={min_puncta_size}'
-            viewer.add_labels(stacked_labels, name=layer_name, scale = [4, 1, 1])
+            viewer.add_labels(stacked_labels, name=layer_name, scale = [4, 1, 1],  blending='additive')
