@@ -14,6 +14,7 @@ from constants import INHIBITORY_MAPPING_NAME, EXCITATORY_MAPPING_NAME, INHIBITO
 from skimage.measure import label, regionprops
 from skimage.filters import threshold_otsu
 import numpy as np
+from skimage.segmentation import clear_border
 #TODO - Finish defining all for everything. Also maybe do default color mapping
 
 def ask_user_for_color_mapping():
@@ -63,7 +64,7 @@ def configure_viewer(viewer, image, viewer_index):
         viewer.add_image(ch1, name='Ch1: RFP', blending='additive', colormap='cyan', scale = [4, 1, 1])
         viewer.add_image(ch2, name='Ch2: Gephyrin', blending='additive', colormap='green', scale = [4, 1, 1])
         viewer.add_image(ch3, name='Ch3: Cell Fill', blending='additive', colormap='white', scale = [4, 1, 1]) 
-
+        normalized_puncta(ch1, ch2, ch3, viewer)
         # viewer.layers['Ch1: RFP'] = [4, 1, 1]
         # viewer.layers['Ch2: Gephyrin'] = [4, 1, 1]
         # viewer.layers['Ch3: Cell Fill'] = [4, 1, 1]
@@ -160,3 +161,61 @@ def map_processing(ch1, ch2, ch3, ch4, viewer):
         # Add filtered centroids to the points layer (only inside the cell fill)
         viewer.add_image(filtered_areas, name='Filtered Areas', blending='additive', colormap='yellow')
         viewer.add_points(filtered_centroids, name = 'Filtered Centroids', blending = 'additive')
+
+def normalized_puncta(ch1, ch2, ch3, viewer):
+    # Normalize channel 2 using channel 1
+    z, x, y = ch1.shape
+    ch2multiplied = ch2*100
+    viewer.add_image(ch2multiplied)
+    normch4 = ch2multiplied/ch1
+    viewer.add_image(normch4, contrast_limits =(0, 80), scale = [4, 1, 1] )
+        
+    # Define the brightness range for dendrites in channel 1
+    dendritemin = 10
+    dendritemax = 80
+
+    # Create a mask for dendrites based on brightness range in ch1
+    dendrite_mask = (ch1 >= dendritemin) & (ch1 <= dendritemax)
+
+    # Apply the mask to normch4
+    normch4_dendrites = np.where(dendrite_mask, normch4, 0)
+    viewer.add_image(normch4_dendrites)
+    # imsave('normch4_dendrites.tif', normch4_dendrites.astype(np.uint8))
+
+    # Create a 4-channel image
+    image_with_normch4 = np.stack([ch1, ch2, ch3, normch4_dendrites], axis=0)
+    # imsave('image_with_normch4.tif', image_with_normch4.astype(np.uint8))
+
+    # Calculate mean and standard deviation of normch4 in dendrite areas
+    dendrite_pixels = normch4_dendrites[dendrite_mask]
+    mean_intensity = dendrite_pixels.mean()
+    std_intensity = dendrite_pixels.std()
+
+    print(f"Mean intensity: {mean_intensity}")
+    print(f"Standard deviation: {std_intensity}")
+
+        
+    # Loop over threshold and minimum puncta size combinations
+    for num_stddevs in range(1, 2):
+        threshold = mean_intensity + num_stddevs * std_intensity
+        for min_puncta_size in range(3, 5):
+                # Initialize a 3D array for stacking filtered mask planes
+            stacked_labels = np.zeros((z, x, y), dtype=int)
+            # Process each z-plane separately
+            for z_index in range(z):
+                # Create a binary mask for the current plane
+                puncta_mask_plane = normch4_dendrites[z_index] > threshold
+                puncta_mask_plane = clear_border(puncta_mask_plane)
+                
+                # Label the connected components in the current plane
+                labels_plane = label(puncta_mask_plane)
+                
+                # Filter regions and add polygons
+                for region in regionprops(labels_plane):
+                    if region.area >= min_puncta_size:
+                        # Create a binary mask of the current region
+                        region_mask = labels_plane == region.label
+                        stacked_labels[z_index][labels_plane == region.label] = 1
+
+            layer_name = f'Thresh={num_stddevs}_MinSize={min_puncta_size}'
+            viewer.add_labels(stacked_labels, name=layer_name, scale = [4, 1, 1])
