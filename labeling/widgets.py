@@ -229,7 +229,7 @@ class AddPointsLayerWidget(QWidget):
         # Configure point defaults with correct type and initial label
         points_layer.feature_defaults = {
             'label': 0, 
-            'confidence': 1, 
+            'Notes': 1, 
             'type': 'Ignore'
         }
         
@@ -239,7 +239,7 @@ class AddPointsLayerWidget(QWidget):
         # Set initial features for the layer
         points_layer.features = {
             'label': np.array([1]),
-            'confidence': np.array([1]),
+            'Notes': np.array([1]),
             'type': np.array(['Ignore'])
         }
 
@@ -345,7 +345,7 @@ class AddPointsFromCSVWidget(QWidget):
             # Extract the features
             features = {
                 'label': df['label'].to_numpy(),
-                'confidence': df['confidence'].to_numpy(),
+                'Notes': df['Notes'].to_numpy(),
                 'type': df['type'].values if 'type' in df.columns else np.array(['Unknown'] * len(df))
             }
 

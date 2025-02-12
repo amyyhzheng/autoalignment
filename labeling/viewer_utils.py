@@ -87,7 +87,7 @@ def configure_viewer(viewer, image, viewer_index):
     points_layers["Points Layer 1"] = points_layer
     points_layer.feature_defaults = {
         'label': 0, 
-        'confidence': 1, 
+        'Notes': 1, 
         'type': 'Default', 
     }
     # Set the face color property to use the feature

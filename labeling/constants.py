@@ -9,11 +9,12 @@ INHIBITORY_MAPPING_NAME = "Inhibitory Map"
 
 INHIBITORY_TYPE_TO_COLOR = {
     'Ignore': 'black',
-    'ShaftGephBassoonNoSynTd': 'yellow',
+    'ShaftGephBassoonNoSynTd': 'orange',
     'ShaftGephBassoonSynTd': 'cyan',
-    'SpineGephBassoonNoSynTd': 'green',
+    'SpineGephBassoonNoSynTd': 'white',
     'SpineGephBassoonSynTd': 'blue',
-    'GephNoBassoon': 'red',
+    'GephNoBassoon': 'green',
+    'Geph+Bassoon': 'yellow',
     'Ambiguous': 'magenta',
 }
 
@@ -32,6 +33,6 @@ EXCITATORY_TYPE_TO_COLOR = {
 INITIAL_POINTS = np.array([[0, 0, 0]])
 INITIAL_FEATURES = {
     'label': [1],
-    'confidence': [1],
+    'Notes': [1],
     'type': ['Ignore']
 }

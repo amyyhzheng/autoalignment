@@ -39,36 +39,36 @@ def assign_incremental_labels(points_layer):
         points_layer.feature_defaults['label'] = new_label if num_points > 1 else 0
         print(f"Updated Labels: {points_layer.features['label']}")
 
-def enable_confidence_editing(points_layer, viewer):
+def enable_Notes_editing(points_layer, viewer):
     """
-    Enables right-click editing of the 'confidence' feature in Napari.
+    Enables right-click editing of the 'Notes' feature in Napari.
     
-    :param points_layer: The points layer where 'confidence' should be editable.
+    :param points_layer: The points layer where 'Notes' should be editable.
     """
     @points_layer.mouse_drag_callbacks.append
     def on_right_click(layer, event):
-        """Detects right-click and opens a context menu for editing confidence."""
+        """Detects right-click and opens a context menu for editing Notes."""
         if event.type == 'mouse_press' and event.button == 2:  # Right-click (button 2)
             index = layer.get_value(event.position)
             
             if index is not None:
                 menu = QMenu()
-                edit_action = menu.addAction("Edit Confidence")
+                edit_action = menu.addAction("Edit Notes")
                 action = menu.exec_(event.native.globalPos())  # Show the menu at cursor position
                 
                 if action == edit_action:
                     # Open input dialog
-                    current_confidence = str(layer.features['confidence'].iloc[index])
-                    new_confidence, ok = QInputDialog.getText(
-                        None, "Edit Confidence", "Enter new confidence value:", text=current_confidence
+                    current_Notes = str(layer.features['Notes'].iloc[index])
+                    new_Notes, ok = QInputDialog.getText(
+                        None, "Edit Notes", "Enter new Notes value:", text=current_Notes
                     )
                     
-                    if ok and new_confidence:
-                        # Update confidence feature
-                        layer.features.loc[index, 'confidence'] = str(new_confidence)
+                    if ok and new_Notes:
+                        # Update Notes feature
+                        layer.features.loc[index, 'Notes'] = str(new_Notes)
 
                         # # Force a refresh of the text labels
-                        # layer.text = {'string': '{label} | {confidence}', 'size': 10, 'color': 'white', 'anchor': 'center'}
+                        # layer.text = {'string': '{label} | {Notes}', 'size': 10, 'color': 'white', 'anchor': 'center'}
                         
                         layer.refresh()  # Refresh Napari display
 
@@ -88,9 +88,9 @@ def enable_confidence_editing(points_layer, viewer):
                 # layer.selected_data = set()
 def create_point_label_handler(points_layer, viewer):
     """
-    Combines automatic label assignment and editable confidence values.
+    Combines automatic label assignment and editable Notes values.
     
     :param points_layer: The napari points layer to enhance.
     """
     assign_incremental_labels(points_layer)
-    enable_confidence_editing(points_layer, viewer)
+    enable_Notes_editing(points_layer, viewer)

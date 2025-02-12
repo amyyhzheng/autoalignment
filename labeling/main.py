@@ -7,7 +7,7 @@ from typetocolor import TypeToColor
 if __name__ == "__main__":
     #insert image file path(s) here, separated by comma if multiple images
     image_paths = [
-    '/Users/amyzheng/Desktop/4056B14ApicalsmoothedR1.tiff'
+    r'Z:\Bettina\Labmeetings\2025-02-07_files\Mean+GaussBlur_rad0.5.tif'
     ]
     images = [imread(path) for path in image_paths]
     TypeToColor.add_mapping(INHIBITORY_MAPPING_NAME, INHIBITORY_TYPE_TO_COLOR)
