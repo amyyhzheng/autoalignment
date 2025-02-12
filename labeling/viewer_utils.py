@@ -116,6 +116,7 @@ def configure_viewer(viewer, image, viewer_index):
 
     objectj_widget = AddPointsFromObjectJWidget(viewer, points_layers, update_widget)
     viewer.window.add_dock_widget(objectj_widget, name = "Load Points from ObjectJ")
+    
 def map_processing(ch1, ch2, ch3, ch4, viewer):
 
         # Thresholding Gephyrin (Ch1), Bassoon (Ch4), and Cell Fill (Ch3) channels using Otsu's method
@@ -203,7 +204,8 @@ def normalized_puncta(ch1, ch2, ch3, viewer):
 
         
     # Loop over threshold and minimum puncta size combinations -CHANGE HERE IF NEEDED
-    for num_stddevs in range(1, 3):
+    num_stddevs_list = [x*0.5 for x in range(0, 7)]
+    for num_stddevs in num_stddevs_list:
         threshold = mean_intensity + num_stddevs * std_intensity
         for min_puncta_size in range(3, 5):
                 # Initialize a 3D array for stacking filtered mask planes
