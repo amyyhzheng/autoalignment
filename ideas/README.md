@@ -35,6 +35,8 @@ By deriving the algorithm from Bayes' theorem, it inherently incorporates prior 
 
 <div style="text-align: center">⁂</div>
 
+<img src="https://r2cdn.perplexity.ai/pplx-full-logo-primary-dark%402x.png" class="logo" width="120"/>
+
 # P(WVO = F P(HkI Wi)P(Wi)P(Hs)
 
 k E P(Hk |W j)P(W jin richardson lucy what is entered in each phase of this how does this reassign image
@@ -83,3 +85,20 @@ The algorithm can be extended with additional features:
 These extensions modify the update equation to improve the deconvolution results in various ways, such as noise reduction and faster convergence[^2][^3].
 
 <div style="text-align: center">⁂</div>
+
+[^1]: https://www.strollswithmydog.com/richardson-lucy-algorithm/
+
+[^2]: https://imagej.net/libs/imagej-ops/deconvolution
+
+[^3]: https://stanford.edu/class/ee367/Winter2021/projects/report_evans.pdf
+
+[^4]: https://www.instagram.com/jonrichardsoncomedian/p/CcoEPt5MSqW/
+
+[^5]: https://pmc.ncbi.nlm.nih.gov/articles/PMC3986040/
+
+[^6]: https://www.reddit.com/r/panelshow/comments/1c2a2d0/jon_richardson_and_lucy_beaumont_have_seperated/
+
+[^7]: https://stargazerslounge.com/topic/228147-lucy-richardson-deconvolution-so-what-is-it/
+
+[^8]: https://www.youtube.com/watch?v=pkCWTDsZyRI
+
