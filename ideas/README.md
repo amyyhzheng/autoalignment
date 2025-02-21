@@ -35,8 +35,6 @@ By deriving the algorithm from Bayes' theorem, it inherently incorporates prior 
 
 <div style="text-align: center">⁂</div>
 
-
-
 # P(WVO = F P(HkI Wi)P(Wi)P(Hs)
 
 k E P(Hk |W j)P(W jin richardson lucy what is entered in each phase of this how does this reassign image
@@ -77,3 +75,11 @@ $$ denotes convolution[^2]
 This process reassigns image intensity by iteratively refining the estimate, effectively deblurring the image while accounting for Poisson noise[^1][^3].
 
 The algorithm can be extended with additional features:
+
+1. Total Variation Regularization: Helps prevent noise amplification[^2][^3].
+2. Vector Acceleration: Speeds up convergence[^2].
+3. Non-Circulant Edge Handling: Reduces boundary artifacts[^2].
+
+These extensions modify the update equation to improve the deconvolution results in various ways, such as noise reduction and faster convergence[^2][^3].
+
+<div style="text-align: center">⁂</div>
