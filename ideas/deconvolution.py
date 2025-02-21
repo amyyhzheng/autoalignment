@@ -1,6 +1,7 @@
 import numpy as np
 import tifffile as tiff
 from skimage.restoration import richardson_lucy
+import napari
 
 def richardson_lucy_deconv(image_tiff, psf_tiff, iterations=10, output_tiff='deconvolved.tif'):
     """
@@ -28,8 +29,13 @@ def richardson_lucy_deconv(image_tiff, psf_tiff, iterations=10, output_tiff='dec
     for i in range(image_stack.shape[0]):
         deconvolved_stack[i] = richardson_lucy(image_stack[i], psf, iterations=iterations)
     
-    # Save the result
-    tiff.imwrite(output_tiff, deconvolved_stack.astype(np.float32))
-    print(f"Deconvolved image saved to {output_tiff}")
+    # # Save the result
+    # tiff.imwrite(output_tiff, deconvolved_stack.astype(np.float32))
+    # print(f"Deconvolved image saved to {output_tiff}")
     
     return deconvolved_stack
+
+if __name__ == "main":
+    deconvolved = richardson_lucy_deconv(r"Z:\Amy\FromBettina\2840_Session9_run1_unmixed.tiff", )
+    viewer = napari.Viewer()
+    viewer.add_image(deconvolved)
