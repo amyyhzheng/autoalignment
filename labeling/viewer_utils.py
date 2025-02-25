@@ -16,34 +16,76 @@ from skimage.filters import threshold_otsu
 import numpy as np
 from skimage.segmentation import clear_border
 #TODO - Finish defining all for everything. Also maybe do default color mapping
-
-def ask_user_for_color_mapping():
-    from PyQt5.QtWidgets import QInputDialog, QApplication
-    app = QApplication.instance()  # Get the existing QApplication
-    if not app:  # Create one if it doesn't exist
-        app = QApplication([])
+from qtpy.QtWidgets import QPushButton, QVBoxLayout, QCheckBox, QWidget, QLabel, QInputDialog, QApplication, QDialog
+# def ask_user_for_color_mapping():
+#     from PyQt5.QtWidgets import QInputDialog, QApplication
+#     app = QApplication.instance()  # Get the existing QApplication
+#     if not app:  # Create one if it doesn't exist
+#         app = QApplication([])
     
-    #MAKE THIS MORE ADAPTABLE TO MORE COLOR MAPPINGS
-    options = [INHIBITORY_MAPPING_NAME, EXCITATORY_MAPPING_NAME]
-    mapping_name, ok = QInputDialog.getItem(
-        None, "Select Color Mapping", "Choose a color mapping:", options, 0, False
-    )
-    if ok and mapping_name:
-        return mapping_name
-    else:
-        raise ValueError("No color mapping selected. Exiting configuration.")
+#     #MAKE THIS MORE ADAPTABLE TO MORE COLOR MAPPINGS
+#     options = [INHIBITORY_MAPPING_NAME, EXCITATORY_MAPPING_NAME]
+#     mapping_name, ok = QInputDialog.getItem(
+#         None, "Select Color Mapping", "Choose a color mapping:", options, 0, False
+#     )
+#     if ok and mapping_name:
+#         return mapping_name
+#     else:
+#         raise ValueError("No color mapping selected. Exiting configuration.")
+
+
+class MappingDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Select Processing Options")
+        self.layout = QVBoxLayout()
+
+        self.label = QLabel("Select processing options:")
+        self.layout.addWidget(self.label)
+
+        self.map_checkbox = QCheckBox("MAP Processing")
+        self.layout.addWidget(self.map_checkbox)
+
+        self.in_vivo_checkbox = QCheckBox("In Vivo Processing")
+        self.layout.addWidget(self.in_vivo_checkbox)
+
+        options = [INHIBITORY_MAPPING_NAME, EXCITATORY_MAPPING_NAME]  # Example color mappings
+        self.mapping_name, self.ok = QInputDialog.getItem(
+            self, "Select Color Mapping", "Choose a color mapping:", options, 0, False
+        )
+
+        self.confirm_button = QPushButton("Confirm")
+        self.confirm_button.clicked.connect(self.accept)  # Close dialog when confirmed
+        self.layout.addWidget(self.confirm_button)
+
+        self.setLayout(self.layout)
+
+    def get_results(self):
+        return self.mapping_name, self.map_checkbox.isChecked(), self.in_vivo_checkbox.isChecked(), self.ok
+
+def ask_user_mapping():
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication([])  # Ensure an application exists
+
+    dialog = MappingDialog()
+    if dialog.exec_():  # Blocks execution until user confirms
+        return dialog.get_results()
+    return None, False, False, False  # Handle case when dialog is closed without confirmation
+
+
 
 def configure_viewer(viewer, image, viewer_index):
     viewer.title = f"Viewer {viewer_index + 1}"
-
+    mapping_name, map_check, invivo_check, ok = ask_user_mapping()
     # Ensure dialog integrates with the existing application loop
-    try:
-        selected_mapping_name = ask_user_for_color_mapping()
-    except ValueError as e:
-        print(f"Error during color mapping selection: {e}")
-        return  # Exit if no mapping is selected
+    # try:
+    #     selected_mapping_name = ask_user_for_color_mapping()
+    # except ValueError as e:
+    #     print(f"Error during color mapping selection: {e}")
+    #     return  # Exit if no mapping is selected
 
-    if selected_mapping_name == EXCITATORY_MAPPING_NAME:
+    if mapping_name == EXCITATORY_MAPPING_NAME:
         ch1, ch2, ch3 = image[:, 0, :, :], image[:, 1, :, :], image[:, 2, :, :]
         viewer.add_image(ch1, name='Ch1: Cell Fill', blending='additive', colormap='red', scale = [3.6, 1, 1])
         viewer.layers['Ch1: Cell Fill'].contrast_limits = (3, 15)
@@ -58,14 +100,16 @@ def configure_viewer(viewer, image, viewer_index):
         viewer.add_image(ch2, name='Ch2: Gephyrin', blending='additive', colormap='green')
         viewer.add_image(ch3, name='Ch3: Cell Fill', blending='additive', colormap='white')
         viewer.add_image(ch4, name='Ch4: Bassoon', blending='additive', colormap='red')
-        map_processing(ch1, ch2, ch3, ch4, viewer)
+        if map_check:
+            map_processing(ch1, ch2, ch3, ch4, viewer)
     elif image.shape[1] == 3:  # 3-channel image
         ch1, ch2, ch3 = image[:, 0, :, :], image[:, 1, :, :], image[:, 2, :, :]
         viewer.add_image(ch1, name='Ch1: Gephyrin', blending='additive', colormap='green', scale = [4, 1, 1])
         viewer.add_image(ch2, name='Ch2: Cell Fill', blending='additive', colormap='red', scale = [4, 1, 1])
         viewer.add_image(ch3, name='Ch3: Syntd', blending='additive', colormap='cyan', scale = [4, 1, 1]) 
         #NORMALIZED PUNCTA DETECTION - comment in/out
-        normalized_puncta(ch1, ch2, ch3, viewer)
+        if invivo_check:
+            normalized_puncta(ch1, ch2, ch3, viewer)
         # viewer.layers['Ch1: RFP'] = [4, 1, 1]
         # viewer.layers['Ch2: Gephyrin'] = [4, 1, 1]
         # viewer.layers['Ch3: Cell Fill'] = [4, 1, 1]
@@ -80,7 +124,7 @@ def configure_viewer(viewer, image, viewer_index):
         size=7,
         edge_width=0.1,
         edge_color='white',
-        face_color= TypeToColor.map_types_to_colors(['Default'], selected_mapping_name)[0],  # Set initial face color directly
+        face_color= TypeToColor.map_types_to_colors(['Default'], mapping_name)[0],  # Set initial face color directly
         text={'string': '{label}', 'size': 10, 'color': 'white', 'anchor': 'center'},
         name=f"Points Layer 1",
     )
@@ -95,7 +139,7 @@ def configure_viewer(viewer, image, viewer_index):
     lable_handler = create_point_label_handler(points_layer, viewer)
 
     # Add UpdatePointTypeWidget
-    update_widget = UpdatePointTypeWidget(viewer, points_layers, selected_mapping_name)
+    update_widget = UpdatePointTypeWidget(viewer, points_layers, mapping_name)
     viewer.window.add_dock_widget(update_widget, name="Update Point Type")
 
     # Add AddPointsLayerWidfget
