@@ -1,0 +1,108 @@
+import numpy as np
+from skimage.measure import label, regionprops
+from skimage.segmentation import find_boundaries
+
+def create_roi_outline(label_image):
+    """
+    Create a precise outline of the labeled regions of interest (ROIs) in a binary label image.
+
+    Parameters:
+    ----------
+    label_image : numpy.ndarray
+        Input binary label image where non-zero pixels represent the ROI.
+
+    Returns:
+    -------
+    outline_shapes : list of numpy.ndarray
+        List of arrays, where each array contains the vertices of the outline for a connected component.
+    """
+    if not isinstance(label_image, np.ndarray):
+        raise ValueError("Input must be a numpy array.")
+
+    if label_image.ndim != 2:
+        raise ValueError("Input label image must be 2-dimensional.")
+
+    # Label connected components in the binary image
+    labeled_components = label(label_image > 0)
+
+    outline_shapes = []
+
+    # Loop through each connected component
+    for region in regionprops(labeled_components):
+        # Get the coordinates of the bounding box
+        min_row, min_col, max_row, max_col = region.bbox
+
+        # Extract the mask for the region
+        mask = labeled_components[min_row:max_row, min_col:max_col] == region.label
+
+        # Find boundaries of the mask
+        boundaries = find_boundaries(mask, mode="outer").astype(np.uint8)
+
+        # Get perimeter coordinates in (row, col) order
+        perimeter_coords = np.argwhere(boundaries)
+
+        # Shift coordinates to global image space
+        perimeter_coords[:, 0] += min_row
+        perimeter_coords[:, 1] += min_col
+
+        # Sort coordinates to form a connected outline (clockwise or counterclockwise)
+        ordered_coords = sort_coordinates_clockwise(perimeter_coords)
+
+        outline_shapes.append(ordered_coords)
+
+    return outline_shapes
+
+
+def sort_coordinates_clockwise(coords):
+    """
+    Sort a set of 2D points in a roughly clockwise order.
+
+    Parameters:
+    ----------
+    coords : numpy.ndarray
+        Array of points (row, col) to sort.
+
+    Returns:
+    -------
+    sorted_coords : numpy.ndarray
+        Points sorted in a clockwise order.
+    """
+    centroid = coords.mean(axis=0)
+    centered_coords = coords - centroid
+    angles = np.arctan2(centered_coords[:, 0], centered_coords[:, 1])
+    sorted_indices = np.argsort(angles)
+    return coords[sorted_indices]
+
+
+# Example usage:
+if __name__ == "__main__":
+    import napari
+
+    # Example binary label image
+    label_img = np.array([
+        [0, 0, 1, 1, 0],
+        [0, 0, 1, 1, 0],
+        [1, 1, 0, 0, 1],
+        [1, 1, 1, 1, 1],
+        [0, 0, 0, 0, 0],
+    ])
+
+    # Create the precise outlines of the ROI
+    outline_shapes = create_roi_outline(label_img)
+
+    # Visualize using napari
+    viewer = napari.Viewer()
+    viewer.add_labels(label_img, name="Labels")
+
+    # Add each outline as a shape layer
+    for outline in outline_shapes:
+        viewer.add_shapes(
+            [outline],
+            shape_type="polygon",
+            edge_color="cyan",
+            face_color="transparent",
+            edge_width=0.1,
+            name="ROI Outline",
+        )
+
+    napari.run()

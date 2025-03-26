@@ -1,0 +1,127 @@
+
+import numpy as np
+import scipy.ndimage
+import scipy.fftpack
+import scipy.ndimage
+import napari
+import tifffile as tif
+import cv2
+
+def original_spline_smoothing(image):
+    """This is the original smoothing algorithm copied from the version
+    of the unmixing algorithm that only works on Matlab 2018...
+    """
+    """Apply 2D B3-spline smoothing."""
+    
+    spline_filter = np.array([
+        [0.0039, 0.0156, 0.0234, 0.0156, 0.0039],
+        [0.0156, 0.0625, 0.0938, 0.0625, 0.0156],
+        [0.0234, 0.0938, 0.1406, 0.0938, 0.0234],
+        [0.0156, 0.0625, 0.0938, 0.0625, 0.0156],
+        [0.0039, 0.0156, 0.0234, 0.0156, 0.0039]
+    ], dtype=np.float32)  # Explicit dtype to avoid issues
+
+    if image.ndim != 2:
+        raise ValueError(f"Expected 2D image, but got {image.shape}")
+
+    # Apply smoothing using correlation
+    new_image = scipy.ndimage.correlate(image, spline_filter, mode='constant')
+
+    return new_image
+def median_filter_2x2(image):
+    """Apply a 2x2 median filter."""
+    return scipy.ndimage.median_filter(image, size=2)
+def butterworth_notch_filter(shape, d0=30, order=2):
+    """Creates a Butterworth notch filter to suppress periodic noise."""
+    rows, cols = shape
+    crow, ccol = rows // 2, cols // 2  # Center of the frequency domain
+
+    mask = np.ones((rows, cols), np.float32)
+    
+    # Identify noise peaks automatically (horizontal/vertical)
+    for dx in [-50, 50]:  # Adjust for specific noise frequencies
+        for dy in [-50, 50]:
+            x, y = ccol + dx, crow + dy
+            dist = np.sqrt((np.arange(rows)[:, None] - crow) ** 2 + (np.arange(cols)[None, :] - ccol) ** 2)
+            mask *= 1 / (1 + (d0 / (dist + 1e-5)) ** (2 * order))  # Avoid div-by-zero
+
+    return mask
+def automatic_notch_filter(fshift, threshold=0.1):
+    """Create a mask that removes only bright frequency peaks."""
+    magnitude_spectrum = np.abs(fshift)
+    mask = np.ones_like(magnitude_spectrum, dtype=np.float32)
+    
+    # Identify noise peaks: values above threshold * max intensity
+    peaks = magnitude_spectrum > (threshold * magnitude_spectrum.max())
+    mask[peaks] = 0  # Suppress only high-intensity frequency components
+
+    return mask
+
+def fft_denoising(img, noise_threshold=0.1):
+    """Denoise an image using FFT with an automatic notch filter."""
+
+    # FFT
+    f = np.fft.fft2(img)
+    fshift = np.fft.fftshift(f)
+    magnitude_spectrum = np.log(1 + np.abs(fshift))
+
+    # Apply adaptive notch filter
+    mask = automatic_notch_filter(fshift, threshold=noise_threshold)
+    fshift_filtered = fshift * mask
+
+    # Inverse FFT
+    f_ishift = np.fft.ifftshift(fshift_filtered)
+    img_denoised = np.fft.ifft2(f_ishift)
+    img_denoised = np.abs(img_denoised)
+
+    return img_denoised
+
+def inverse_spline_smoothing(image):
+    """Approximate the inverse of the B3-spline smoothing using FFT deconvolution."""
+    """Approximate the inverse of B3-spline smoothing using Wiener deconvolution."""
+    
+    spline_filter = np.array([
+        [0.0039, 0.0156, 0.0234, 0.0156, 0.0039],
+        [0.0156, 0.0625, 0.0938, 0.0625, 0.0156],
+        [0.0234, 0.0938, 0.1406, 0.0938, 0.0234],
+        [0.0156, 0.0625, 0.0938, 0.0625, 0.0156],
+        [0.0039, 0.0156, 0.0234, 0.0156, 0.0039]
+    ])
+
+    # Ensure filter is centered in Fourier space
+    filter_padded = np.zeros_like(image)
+    h, w = spline_filter.shape
+    filter_padded[:h, :w] = spline_filter  # Top-left corner
+    filter_padded = np.fft.ifftshift(filter_padded)  # Shift to center
+
+    # Compute FFTs
+    F_image = np.fft.fft2(image)
+    F_spline = np.fft.fft2(filter_padded)
+
+    # Wiener deconvolution: prevent amplifying high-frequency noise
+    epsilon = 1e-3  # Regularization term
+    F_inverse = F_image / (F_spline + epsilon)
+
+    # Compute inverse FFT
+    deconvolved_image = np.fft.ifft2(F_inverse)
+    
+    # Take magnitude and normalize
+    deconvolved_image = np.abs(deconvolved_image)
+    deconvolved_image -= deconvolved_image.min()
+    deconvolved_image /= deconvolved_image.max()  # Normalize to [0,1]
+    
+    return deconvolved_image
+viewer = napari.Viewer()
+image = tif.imread('/Users/amyzheng/Desktop/deconvolution/cellfill_unmixed.tif')
+print(image.shape)
+viewer.add_image(image)
+smoothed_image = original_spline_smoothing(image)
+viewer.add_image(smoothed_image)
+median_image = median_filter_2x2(image)
+viewer.add_image(median_image)
+
+fftdenoise = fft_denoising(image)
+viewer.add_image(fftdenoise)
+inverse_image = inverse_spline_smoothing(smoothed_image)
+viewer.add_image(inverse_image)
+napari.run()
