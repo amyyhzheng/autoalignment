@@ -15,3 +15,8 @@ run all python files individually, then run main.py last. When making local chan
 
 **Puncta Detection**
 - likely most efficient as of 1/30 to export all of the detected puncta and re upload/drag them into labeling software
+
+**Updating Configurations**
+1. Add the color mapping to typetocolor constants
+2. import the mapping name and add it to the dropdown UI
+3. Should be all good!
