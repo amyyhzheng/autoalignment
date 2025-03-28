@@ -8,13 +8,20 @@ import numpy as np
 INHIBITORY_MAPPING_NAME = "Inhibitory Map"
 
 INHIBITORY_TYPE_TO_COLOR = {
-    'Ignore': 'black',
-    'ShaftGephBassoonNoSynTd': 'orange',
-    'ShaftGephBassoonSynTd': 'cyan',
-    'SpineGephBassoonNoSynTd': 'white',
-    'SpineGephBassoonSynTd': 'blue',
+    'Shaft_Geph+Bsn_NoSynTd': 'orange',
+    'Shaft_Geph+Bsn_+SynTd': 'cyan',
+    'Spine_Geph+Bsn_NoSynTd': 'white',
+    'Spine_Geph+Bsn_+SynTd': 'blue',
     'GephNoBassoon': 'green',
-    'Geph+Bassoon': 'yellow',
+    'Geph+Bsn': 'yellow',
+    'Bsn_onSyntd_NoGeph': 'red',
+    'ShaftNoSyntd': 'orange',
+    'Shaft+Syntd': 'cyan',
+    'SpineNoSyntd': 'white',
+    'Spine+Syntd': 'blue',
+    'Shaft_SyntdNotScored': 'green',
+    'Spine_SyntdNotScored': 'yellow',
+    'Ignore': 'black',
     'Ambiguous': 'magenta',
 }
 
