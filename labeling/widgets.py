@@ -390,6 +390,29 @@ class AddPointsFromObjectJWidget(QWidget):
         layout.addWidget(self.load_button)
 
         self.setLayout(layout)
+import pandas as pd
+import numpy as np
+from qtpy.QtWidgets import QWidget, QVBoxLayout, QPushButton, QFileDialog
+
+class AddPointsFromObjectJWidget(QWidget):
+    """Widget to load points layer data from a custom CSV file.
+    Currently an arbitrary scaling - likely need to change it to 
+    Aygul's settings 
+    """
+    def __init__(self, viewer, points_layers, update_widget):
+        super().__init__()
+        self.viewer = viewer
+        self.points_layers = points_layers
+        self.update_widget = update_widget
+        self.scale_factors = [1,12, 12] #Z, X, Y Scaling 
+
+        layout = QVBoxLayout()
+
+        self.load_button = QPushButton("Load Points Layer from ObjectJ")
+        self.load_button.clicked.connect(self.load_points_from_csv)
+        layout.addWidget(self.load_button)
+
+        self.setLayout(layout)
 
     def load_points_from_csv(self):
         """Load points layer from a custom CSV file."""
@@ -404,64 +427,174 @@ class AddPointsFromObjectJWidget(QWidget):
             # Read the CSV file
             df = pd.read_csv(file_path)
 
-            # Filter necessary columns and handle missing data
+            # Drop unnamed columns
             df = df.drop(columns=[col for col in df.columns if "Unnamed" in col], errors='ignore')
 
-            # Ensure 'X', 'Y', 'Z' columns are numeric and drop invalid rows
-            for col in ['X', 'Y', 'Z']:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
-            df = df.dropna(subset=['X', 'Y', 'Z'])
+            # **Check for format type**
+            if {'X', 'Y', 'Z'}.issubset(df.columns):
+                self.process_old_format(df)
+            else:
+                self.process_new_format(df)
 
-            # Extract the coordinates
-            points = df[['Z', 'Y', 'X']].to_numpy()
-            # Extract features and map to colors
-            # Extract types and map to colors
-
-            types = df['Session # 2'].fillna('-1').astype(str).to_numpy()
-            mapped_types = []
-            for t in types:
-                # Check for 'landmark' and handle it separately
-                if 'landmark' in t.lower():
-                    mapped_types.append('Landmark')  # Adjust if necessary
-                else:
-                    # Find the matching excitatory type based on the first character
-                    mapped_type = next(
-                        (key for key in EXCITATORY_TYPE_TO_COLOR if key.startswith(t[0] + ':')),
-                        '-1: Nothing'
-                    )
-                    mapped_types.append(mapped_type)
-
-            # # Map types to colors
-            # mapped_colors = TypeToColor.map_types_to_colors(mapped_types, EXCITATORY_MAPPING_NAME)
-
-
-            # Extract features (e.g., labels)
-            features = {
-                'label': df['Synapse number'].fillna('Unknown').astype(str).to_numpy(),
-                'type': mapped_types
-            }
-
-            # Add a new points layer
-            layer_name = f"Points Layer {len(self.points_layers) + 1}"
-            points_layer = self.viewer.add_points(
-                points,
-                features=features,
-                size=7,
-                edge_width=0.1,
-                border_color='white',
-                face_color= TypeToColor.map_types_to_colors(features['type'], self.update_widget.mapping_name),  # Default color for simplicity
-                text={'text': 'label', 'size': 10, 'color': 'white', 'anchor': 'center'},
-                name=layer_name,
-            )
-            print(mapped_types)
-
-            # Add the new layer to points_layers dictionary
-            self.points_layers[layer_name] = points_layer
-
-            # Update the UpdatePointTypeWidget with the new layer
-            self.update_widget.points_layers = self.points_layers
-            self.update_widget.update_widget_for_active_layer(None)  # Force update
-
-            print(f"Loaded points layer from CSV: {layer_name}")
         except Exception as e:
             print(f"Error loading points layer from CSV: {e}")
+
+    def process_old_format(self, df):
+        """Process CSV files in the old format (explicit X, Y, Z columns)."""
+        # Ensure coordinates are numeric
+        for col in ['X', 'Y', 'Z']:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+        df = df.dropna(subset=['X', 'Y', 'Z'])
+
+        # Extract coordinates
+        points = df[['Z', 'Y', 'X']].to_numpy()
+
+        # Extract types from 'Session # 2' column
+        types = df.get('Session # 2', '-1').fillna('-1').astype(str).to_numpy()
+        mapped_types = [
+            'Landmark' if 'landmark' in t.lower() else 
+            next((key for key in EXCITATORY_TYPE_TO_COLOR if key.startswith(t[0] + ':')), '-1: Nothing')
+            for t in types
+        ]
+
+        features = {
+            'label': df.get('Synapse number', 'Unknown').fillna('Unknown').astype(str).to_numpy(),
+            'type': mapped_types
+        }
+
+        self.add_points_layer(points, features)
+
+
+    def process_new_format(self, df):
+        """Process CSV files in the new format (types embedded in column names)."""
+        points_list = []
+        types_list = []
+
+        for col in df.columns:
+            if col.endswith("_xpos"):
+                base_name = col.replace("_xpos", "")
+                xpos, ypos, zpos = f"{base_name}_xpos", f"{base_name}_ypos", f"{base_name}_zpos"
+
+                if xpos in df and ypos in df and zpos in df:
+                    valid_rows = df[[zpos, ypos, xpos]].dropna()
+                    points = valid_rows.to_numpy()
+                    points_list.append(points)
+                    types_list.extend([base_name] * len(points))
+
+        if points_list:
+            all_points = np.vstack(points_list)
+            scale_z, scale_y, scale_x = self.scale_factors
+            all_points *= np.array([scale_z, scale_y, scale_x])  # Apply scaling
+            all_types = np.array(types_list)
+        else:
+            print("No valid points found in the CSV.")
+            return
+
+        features = {
+            'label': np.arange(len(all_points)).astype(str),
+            'type': all_types
+        }
+
+        self.add_points_layer(all_points, features)
+
+
+    def add_points_layer(self, points, features):
+        """Adds a new points layer to the viewer."""
+        layer_name = f"Points Layer {len(self.points_layers) + 1}"
+        points_layer = self.viewer.add_points(
+            points,
+            features=features,
+            size=7,
+            edge_width=0.1,
+            edge_color='white',
+            face_color=TypeToColor.map_types_to_colors(features['type'], self.update_widget.mapping_name),
+            text={'text': 'label', 'size': 10, 'color': 'white', 'anchor': 'center'},
+            name=layer_name,
+        )
+
+        # Store the new layer
+        self.points_layers[layer_name] = points_layer
+        self.update_widget.points_layers = self.points_layers
+        self.update_widget.update_widget_for_active_layer(None)
+
+        print(f"Loaded points layer from CSV: {layer_name}")
+
+    # def load_points_from_csv(self):
+    #     """Load points layer from a custom CSV file."""
+    #     options = QFileDialog.Options()
+    #     file_path, _ = QFileDialog.getOpenFileName(
+    #         self, "Select CSV File", "", "CSV Files (*.csv);;All Files (*)", options=options
+    #     )
+    #     if not file_path:
+    #         return  # User canceled the file dialog
+
+    #     try:
+    #         # Read the CSV file
+    #         df = pd.read_csv(file_path)
+    #         # df.rename(columns={
+    #         # 'CorticalSpinePSD_xpos': 'X',
+    #         # 'CorticalSpinePSD_ypos': 'Y',
+    #         # 'CorticalSpinePSD_zpos': 'Z'
+    #         # }, inplace=True)
+
+    #         # Filter necessary columns and handle missing data
+    #         df = df.drop(columns=[col for col in df.columns if "Unnamed" in col], errors='ignore')
+
+    #         # Ensure 'X', 'Y', 'Z' columns are numeric and drop invalid rows
+    #         for col in ['X', 'Y', 'Z']:
+    #             df[col] = pd.to_numeric(df[col], errors='coerce')
+    #         df = df.dropna(subset=['X', 'Y', 'Z'])
+
+    #         # Extract the coordinates
+    #         points = df[['Z', 'Y', 'X']].to_numpy()
+    #         # Extract features and map to colors
+    #         # Extract types and map to colors
+
+    #         types = df['Session # 2'].fillna('-1').astype(str).to_numpy()
+    #         mapped_types = []
+    #         for t in types:
+    #             # Check for 'landmark' and handle it separately
+    #             if 'landmark' in t.lower():
+    #                 mapped_types.append('Landmark')  # Adjust if necessary
+    #             else:
+    #                 # Find the matching excitatory type based on the first character
+    #                 mapped_type = next(
+    #                     (key for key in EXCITATORY_TYPE_TO_COLOR if key.startswith(t[0] + ':')),
+    #                     '-1: Nothing'
+    #                 )
+    #                 mapped_types.append(mapped_type)
+
+    #         # # Map types to colors
+    #         # mapped_colors = TypeToColor.map_types_to_colors(mapped_types, EXCITATORY_MAPPING_NAME)
+
+
+    #         # Extract features (e.g., labels)
+    #         features = {
+    #             'label': df['Synapse number'].fillna('Unknown').astype(str).to_numpy(),
+    #             'type': mapped_types
+    #         }
+
+    #         # Add a new points layer
+    #         layer_name = f"Points Layer {len(self.points_layers) + 1}"
+    #         points_layer = self.viewer.add_points(
+    #             points,
+    #             features=features,
+    #             size=7,
+    #             edge_width=0.1,
+    #             border_color='white',
+    #             face_color= TypeToColor.map_types_to_colors(features['type'], self.update_widget.mapping_name),  # Default color for simplicity
+    #             text={'text': 'label', 'size': 10, 'color': 'white', 'anchor': 'center'},
+    #             name=layer_name,
+    #         )
+    #         print(mapped_types)
+
+    #         # Add the new layer to points_layers dictionary
+    #         self.points_layers[layer_name] = points_layer
+
+    #         # Update the UpdatePointTypeWidget with the new layer
+    #         self.update_widget.points_layers = self.points_layers
+    #         self.update_widget.update_widget_for_active_layer(None)  # Force update
+
+    #         print(f"Loaded points layer from CSV: {layer_name}")
+    #     except Exception as e:
+    #         print(f"Error loading points layer from CSV: {e}")
