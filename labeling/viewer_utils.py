@@ -118,6 +118,36 @@ def configure_viewer(viewer, image, viewer_index):
         viewer.add_image(ch1, name='Ch1: Gephyrin', blending='additive', colormap='green', scale = [4, 1, 1])
         viewer.add_image(ch2, name='Ch2: Cell Fill', blending='additive', colormap='red', scale = [4, 1, 1])
         viewer.add_image(ch3, name='Ch3: Syntd', blending='additive', colormap='cyan', scale = [4, 1, 1]) 
+        plane_parameters = {
+            'position': (0, 0, 0),
+            'normal': (1, 0, 0),
+            'thickness': 10,
+        }
+        
+        plane_layer = viewer.add_image(
+            ch3,
+            rendering='mip',
+            name='SynTd plane',
+            depiction='plane',
+            blending='additive',
+            opacity=1,
+            plane=plane_parameters, 
+            colormap='cyan',
+            scale  = [4, 1, 1],
+        ) 
+
+        plane_layer = viewer.add_image(
+            ch1,
+            rendering='mip',
+            name='Gephyrin plane',
+            depiction='plane',
+            blending='additive',
+            opacity=1,
+            plane=plane_parameters, 
+            colormap='green',
+            scale  = [4, 1, 1], 
+        )
+
         #NORMALIZED PUNCTA DETECTION - comment in/out
         if invivo_check:
             normalized_puncta(ch1, ch2, ch3, viewer)
