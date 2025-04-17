@@ -118,6 +118,23 @@ def configure_viewer(viewer, image, viewer_index):
         viewer.add_image(ch1, name='Ch1: Gephyrin', blending='additive', colormap='green', scale = [4, 1, 1])
         viewer.add_image(ch2, name='Ch2: Cell Fill', blending='additive', colormap='red', scale = [4, 1, 1])
         viewer.add_image(ch3, name='Ch3: Syntd', blending='additive', colormap='cyan', scale = [4, 1, 1]) 
+        #HOLD SHIFT while on the plane layer to drag. It should change based on what slice you are on 
+        # Below commented out lines are for getting a single plane
+        plane_parameters = {
+            'position': (32, 32, 32),
+            'normal': (1, 0, 0), #1 in the first position means that it goes through xy planes
+            'thickness': 10,
+        }
+        layer = viewer.add_image(
+            ch3,
+            rendering='average',
+            name='plane',
+            depiction='plane',
+            blending='additive',
+            opacity=0.5,
+            plane=plane_parameters, 
+            scale=[4, 1, 1] 
+        )
         #NORMALIZED PUNCTA DETECTION - comment in/out
         if invivo_check:
             normalized_puncta(ch1, ch2, ch3, viewer)
