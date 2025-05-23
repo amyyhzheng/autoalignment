@@ -5,6 +5,15 @@ import time
 from PyQt5.QtGui import QMouseEvent, QCursor
 from PyQt5.QtCore import Qt
 
+'''
+layer.utils contains all functions that are dependent on a points layer. This includes the following:
+- The increasing points number with successive points
+- Point editing logic
+
+Everything is then tied together with the create_point_label_handler which ties
+these functions to new layers. [Include all the places this is called]
+'''
+
 # def create_point_label_handler(points_layer):
 #     """
 #     Creates a handler to manage point labeling incrementally.
