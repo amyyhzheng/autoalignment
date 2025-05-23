@@ -1,3 +1,13 @@
+'''
+Contains the class for managing typetocolor objects
+i.e. the different color mappings, adding colors to a color mapping, etc. 
+
+Extensions: Make an easy way to add more color mapping from the gui, 
+Make adding colors in the gui actually add to some permanent file
+Make typetocolor class tied to certain setting class
+'''
+
+
 class TypeToColor:
     """
     A manager for handling multiple type-to-color mappings. General manager 
