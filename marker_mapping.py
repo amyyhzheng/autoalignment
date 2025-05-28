@@ -81,6 +81,12 @@ def getUserInput():
     number_of_timepoints = 6
     animal_ID = 'SOM022'
     branch_ID = '2' #Not really checked
+
+    '''
+    
+    FOR KENDYLL JOE EDIT FILE PATHS HERE
+    
+    '''    
     marker_filename = '/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/PunctaScoring/b2/SynapseMarkers/beforeAlignment/CombinedResults.csv'
     fiducial_fileName = '/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/PunctaScoring/b2/Fiducials/CombinedResults.csv'
 
@@ -173,25 +179,53 @@ def getMarkersInfo(marker_fileName, number_of_timepoints):
         transformed from objectJ to imageJ coordinates. 
     
     '''
+    # raw_markers = []
+    # file = pd.read_csv(marker_fileName)
+
+    # for timepoint in range(number_of_timepoints):
+    #     image = file.loc[file['ojj File Name'].str.contains("_" + ojj_tifName + str(timepoint+1), na=False)] # na=False in case there are rows with no/missing values
+    #     timepoint_list = []
+    #     for i in range(len(image)):
+    #         markerType = image["Final S1"].iloc[i]
+    #         x = image["xpos S1"].iloc[i]
+    #         y = image["ypos S1"].iloc[i]
+    #         objectJ_z = image["zpos S1"].iloc[i]
+    #         imageJ_z = transformZ_ObjectJtoImageJ(objectJ_z) # Converts from objectJ to imageJ Z information
+    #         markerInfo = (markerType, (int(x), int(y), imageJ_z))
+    #         timepoint_list.append(tuple(markerInfo))
+
+    #     new_markerList_noLandmarks = [item for item in timepoint_list if item[0] != 'Landmark']
+    #     raw_markers.append(new_markerList_noLandmarks)
+    #     print("Successfully parsed the marker type and coordinates of " + str(len(new_markerList_noLandmarks)) + " synapse markers (excluding landmarks) for Timepoint/Image " + str(timepoint+1))
     raw_markers = []
     file = pd.read_csv(marker_fileName)
 
     for timepoint in range(number_of_timepoints):
-        image = file.loc[file['ojj File Name'].str.contains("_" + ojj_tifName + str(timepoint+1), na=False)] # na=False in case there are rows with no/missing values
+        # Napari Points typically don't encode filenames directly; adjust logic if your pipeline adds them
+        image = file[file['name'].str.contains("_" + ojj_tifName + str(timepoint+1), na=False)] if 'name' in file.columns else file
+
         timepoint_list = []
         for i in range(len(image)):
-            markerType = image["Final S1"].iloc[i]
-            x = image["xpos S1"].iloc[i]
-            y = image["ypos S1"].iloc[i]
-            objectJ_z = image["zpos S1"].iloc[i]
-            imageJ_z = transformZ_ObjectJtoImageJ(objectJ_z) # Converts from objectJ to imageJ Z information
+            if 'markerType' in image.columns:
+                markerType = image["markerType"].iloc[i]
+            elif 'label' in image.columns:
+                markerType = image["label"].iloc[i]
+            else:
+                raise ValueError("No column found for marker type. Expected 'markerType' or 'label'.")
+
+            x = image["axis-0"].iloc[i]
+            y = image["axis-1"].iloc[i]
+            z = image["axis-2"].iloc[i] if 'axis-2' in image.columns else 0
+            imageJ_z = transformZ_ObjectJtoImageJ(z)
             markerInfo = (markerType, (int(x), int(y), imageJ_z))
             timepoint_list.append(tuple(markerInfo))
 
-        new_markerList_noLandmarks = [item for item in timepoint_list if item[0] != 'Landmark']
+        new_markerList_noLandmarks = [item for item in timepoint_list if item[0].lower() != 'landmark']
         raw_markers.append(new_markerList_noLandmarks)
-        print("Successfully parsed the marker type and coordinates of " + str(len(new_markerList_noLandmarks)) + " synapse markers (excluding landmarks) for Timepoint/Image " + str(timepoint+1))
+        print("Parsed " + str(len(new_markerList_noLandmarks)) + " markers (excluding landmarks) for Timepoint/Image " + str(timepoint+1))
+    
     return raw_markers
+    # return raw_markers
 
 # Function that reads the CombinedResults.csv for fiducials and returns the fiducial coordinates across all imaging sessions in imageJ Z (not objectJ Z)
 def getFiducialInfo(fiducial_fileName, number_of_timepoints):
@@ -203,21 +237,41 @@ def getFiducialInfo(fiducial_fileName, number_of_timepoints):
     Output:
         raw_fiducials(list): contains all fiducials of all timepoints
     '''
+    # raw_fiducials = []
+    # file = pd.read_csv(fiducial_fileName)
+    # fiducial_number = file.Marker.count()
+
+    # for i in range(number_of_timepoints):
+    #     coordinates = []
+    #     for j in range(fiducial_number):
+    #         x = file['xpos S' + str(i+1)].iloc[j]
+    #         y = file['ypos S' + str(i+1)].iloc[j]
+    #         objectJ_z = file['zpos S' + str(i+1)].iloc[j]
+    #         imageJ_z = transformZ_ObjectJtoImageJ(objectJ_z)
+    #         fiducial_info = (x, y, imageJ_z)
+    #         coordinates.append(tuple(fiducial_info))
+    #     raw_fiducials.append(coordinates)
+    #     print("Successfully saved " + str(len(coordinates)) + " fiducial coordinates for Timepoint " + str(i+1))
+    # return raw_fiducials
+
     raw_fiducials = []
     file = pd.read_csv(fiducial_fileName)
-    fiducial_number = file.Marker.count()
+
+    if 'timepoint' not in file.columns:
+        raise ValueError("Expected a 'timepoint' column in the Napari fiducial file.")
 
     for i in range(number_of_timepoints):
-        coordinates = []
-        for j in range(fiducial_number):
-            x = file['xpos S' + str(i+1)].iloc[j]
-            y = file['ypos S' + str(i+1)].iloc[j]
-            objectJ_z = file['zpos S' + str(i+1)].iloc[j]
-            imageJ_z = transformZ_ObjectJtoImageJ(objectJ_z)
-            fiducial_info = (x, y, imageJ_z)
-            coordinates.append(tuple(fiducial_info))
-        raw_fiducials.append(coordinates)
-        print("Successfully saved " + str(len(coordinates)) + " fiducial coordinates for Timepoint " + str(i+1))
+        coords = []
+        tp_df = file[file['timepoint'] == i]
+        for _, row in tp_df.iterrows():
+            x = row['axis-0']
+            y = row['axis-1']
+            z = row['axis-2'] if 'axis-2' in row else 0
+            imageJ_z = transformZ_ObjectJtoImageJ(z)
+            coords.append((x, y, imageJ_z))
+        raw_fiducials.append(coords)
+        print(f"Successfully saved {len(coords)} fiducial coordinates for Timepoint {i+1}")
+    
     return raw_fiducials
 
 # Functions that converts between objectJ to imageJ Z information
@@ -1553,4 +1607,30 @@ np.savetxt(export_csv_directory+ '/autoAlignment/' + str(animal_ID) + '_b' + str
 print("Exported the alignment mapping to " + export_csv_directory+ '/autoAlignment/' + str(animal_ID) + '_b' + str(branch_ID) +'_alignmentMapping.csv')
 print("FINISHED THE MAPPING SECTION, yay! \n\nFINISHED RUNNING.")
 
+# Group by timepoint
+csv_by_timepoint = defaultdict(list)
+
+for row in export_cluster_csv:
+    image_label = row[0]  # "Image1", "Image2", etc.
+    timepoint = image_label.replace("Image", "")
+    markerID = row[1]
+    markerType = row[2]
+    x, y, z = row[3], row[4], row[5]
+
+    # Reformat to Napari-friendly column order: z, y, x, label, type
+    napari_row = [z, y, x, markerID, markerType]
+    csv_by_timepoint[timepoint].append(napari_row)
+
+# Write each timepoint to its own CSV file
+napari_header = ["z", "y", "x", "label", "type"]
+autoalign_path = os.path.join(export_csv_directory, 'autoAlignment')
+os.makedirs(autoalign_path, exist_ok=True)
+
+for tp, rows in csv_by_timepoint.items():
+    file_path = os.path.join(autoalign_path, f"{animal_ID}_b{branch_ID}_timepoint{tp}_napari.csv")
+    with open(file_path, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(napari_header)
+        writer.writerows(rows)
+    print(f"Exported Napari-compatible CSV for timepoint {tp} to {file_path}")
  
