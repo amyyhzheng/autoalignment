@@ -20,3 +20,16 @@ run all python files individually, then run main.py last. When making local chan
 1. Add the color mapping to typetocolor constants
 2. import the mapping name and add it to the dropdown UI
 3. Should be all good!
+
+
+**Aygul's Colors**
+
+
+EXCITATORY_TYPE_TO_COLOR = {
+    '-1: Nothing': 'green',
+    '0: SpinePSD95-NoSynTD': 'orange',
+    '1: SpinePSD95-SynTD': 'red',
+    '3: NoSynNudeSpine': 'blue',
+    '4: SynNudeSpine': 'magenta', 
+    'Landmark': 'cyan'
+}
