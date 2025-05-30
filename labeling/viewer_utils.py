@@ -87,11 +87,11 @@ def configure_viewer(viewer, image, viewer_index):
 
     if mapping_name == EXCITATORY_MAPPING_NAME:
         ch1, ch2, ch3 = image[:, 0, :, :], image[:, 1, :, :], image[:, 2, :, :]
-        viewer.add_image(ch1, name='Ch1: teal-geph', blending='additive', colormap='green', scale = [3.6, 1, 1])
+        viewer.add_image(ch1, name='Ch1: teal-geph', blending='additive', colormap='green', scale = [1, 1, 1])
         viewer.layers['Ch1: teal-geph'].contrast_limits = (4, 15)
-        viewer.add_image(ch2, name='Ch2: cell_fill', blending='additive', colormap='red', scale = [3.6, 1, 1])
+        viewer.add_image(ch2, name='Ch2: cell_fill', blending='additive', colormap='red', scale = [1, 1, 1])
         viewer.layers['Ch2: cell_fill'].contrast_limits = (4, 15)
-        viewer.add_image(ch3, name='Ch3: Bouton', blending='additive', colormap='cyan', scale = [3.6, 1, 1])
+        viewer.add_image(ch3, name='Ch3: Bouton', blending='additive', colormap='cyan', scale = [1, 1, 1])
         viewer.layers['Ch3: Bouton'].contrast_limits = (3, 15)
     # Check the number of channels in the image
     elif image.shape[1] == 4:  # 4-channel image
