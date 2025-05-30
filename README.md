@@ -29,7 +29,7 @@ EXCITATORY_TYPE_TO_COLOR = {
     '-1: Nothing': 'green',
     '0: SpinePSD95-NoSynTD': 'orange',
     '1: SpinePSD95-SynTD': 'red',
-    '3: NoSynNudeSpine': 'blue',
-    '4: SynNudeSpine': 'magenta', 
+    '3: SynNudeSpine': 'blue',
+    '4: NoSynNudeSpine': 'magenta', 
     'Landmark': 'cyan'
 }
