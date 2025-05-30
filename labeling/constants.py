@@ -28,11 +28,11 @@ INHIBITORY_TYPE_TO_COLOR = {
 EXCITATORY_MAPPING_NAME = "Excitatory 2P"
 
 EXCITATORY_TYPE_TO_COLOR = {
-    '-1: Nothing': 'blue',
-    '0: SpinePSD95-NoSynTD': 'green',
-    '1: SpinePSD95-SynTD': 'yellow',
-    '3: NoSynNudeSpine': 'red',
-    '4: SynNudeSpine': 'purple', 
+    '-1: Nothing': 'green',
+    '0: SpinePSD95-NoSynTD': 'orange',
+    '1: SpinePSD95-SynTD': 'red',
+    '3: SynNudeSpine': 'blue',
+    '4: NoSynNudeSpine': 'magenta', 
     'Landmark': 'cyan'
 }
 
