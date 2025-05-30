@@ -10,7 +10,7 @@ from constants import INITIAL_FEATURES, INITIAL_POINTS
 from typetocolor import TypeToColor
 from widgets import UpdatePointTypeWidget, CenterOnPointWidget, AddPointsFromCSVWidget, AddPointsLayerWidget, ZoomLevelWidget, AddPointsFromObjectJWidget
 from layer_utils import create_point_label_handler
-from constants import INHIBITORY_MAPPING_NAME, EXCITATORY_MAPPING_NAME, INHIBITORY_TYPE_TO_COLOR, EXCITATORY_TYPE_TO_COLOR
+from constants import INHIBITORY_MAPPING_NAME, EXCITATORY_MAPPING_NAME, EXCITATORY_CONFOCAL_NAME, INHIBITORY_TYPE_TO_COLOR, EXCITATORY_TYPE_TO_COLOR
 from skimage.measure import label, regionprops
 from skimage.filters import threshold_otsu
 import numpy as np
@@ -49,7 +49,7 @@ class MappingDialog(QDialog):
         self.in_vivo_checkbox = QCheckBox("In Vivo Processing")
         self.layout.addWidget(self.in_vivo_checkbox)
 
-        options = [INHIBITORY_MAPPING_NAME, EXCITATORY_MAPPING_NAME]  # Example color mappings
+        options = [INHIBITORY_MAPPING_NAME, EXCITATORY_MAPPING_NAME, EXCITATORY_CONFOCAL_NAME]  
         self.mapping_name, self.ok = QInputDialog.getItem(
             self, "Select Color Mapping", "Choose a color mapping:", options, 0, False
         )
@@ -84,22 +84,33 @@ def configure_viewer(viewer, image, viewer_index):
     # except ValueError as e:
     #     print(f"Error during color mapping selection: {e}")
     #     return  # Exit if no mapping is selected
-
+    #2 photon contrast settings
     if mapping_name == EXCITATORY_MAPPING_NAME:
         ch1, ch2, ch3 = image[:, 0, :, :], image[:, 1, :, :], image[:, 2, :, :]
-        viewer.add_image(ch1, name='Ch1: teal-geph', blending='additive', colormap='green', scale = [1, 1, 1])
-        viewer.layers['Ch1: teal-geph'].contrast_limits = (4, 15)
-        viewer.add_image(ch2, name='Ch2: cell_fill', blending='additive', colormap='red', scale = [1, 1, 1])
-        viewer.layers['Ch2: cell_fill'].contrast_limits = (4, 15)
-        viewer.add_image(ch3, name='Ch3: Bouton', blending='additive', colormap='cyan', scale = [1, 1, 1])
+        viewer.add_image(ch1, name='Ch1: Cell Fill', blending='additive', colormap='red', scale = [1, 1, 1])
+        viewer.layers['Ch1: Cell Fill'].contrast_limits = (3, 15)
+        viewer.add_image(ch2, name='Ch2: PSD95', blending='additive', colormap='cyan', scale = [1, 1, 1])
+        viewer.layers['Ch2: PSD95'].contrast_limits = (3, 15)
+        viewer.add_image(ch3, name='Ch3: Bouton', blending='additive', colormap='green', scale = [1, 1, 1])
         viewer.layers['Ch3: Bouton'].contrast_limits = (3, 15)
     # Check the number of channels in the image
-    elif image.shape[1] == 4:  # 4-channel image
+        
+    elif mapping_name == EXCITATORY_CONFOCAL_NAME:
+        z_spacing = 0.8
         ch1, ch2, ch3, ch4 = image[:, 0, :, :], image[:, 1, :, :], image[:, 2, :, :], image[:, 3, :, :]
-        viewer.add_image(ch1, name='Ch1: RFP', blending='additive', colormap='cyan')
-        viewer.add_image(ch2, name='Ch2: Gephyrin', blending='additive', colormap='green')
-        viewer.add_image(ch3, name='Ch3: Cell Fill', blending='additive', colormap='white')
-        viewer.add_image(ch4, name='Ch4: Bassoon', blending='additive', colormap='red')
+        viewer.add_image(ch1, name='Ch1: PSD95', blending='additive', colormap='cyan', scale = [z_spacing, 0.12, 0.12])
+        viewer.add_image(ch2, name='Ch2: Cell Fill', blending='additive', colormap='white', scale = [z_spacing, 0.12, 0.12])
+        viewer.add_image(ch3, name='Ch3: VGlut1', blending='additive', colormap='green', scale = [z_spacing, 0.12, 0.12])
+        viewer.add_image(ch4, name='Ch4: Weird Channel', blending='additive', colormap='red', scale = [z_spacing, 0.12, 0.12])
+
+    elif image.shape[1] == 4:  # 4-channel image
+        #MAP Z_SPACING FOR BETTINA
+        z_spacing = 0.8
+        ch1, ch2, ch3, ch4 = image[:, 0, :, :], image[:, 1, :, :], image[:, 2, :, :], image[:, 3, :, :]
+        viewer.add_image(ch1, name='Ch1: RFP', blending='additive', colormap='cyan', scale = [z_spacing, 0.12, 0.12])
+        viewer.add_image(ch2, name='Ch2: Gephyrin', blending='additive', colormap='green', scale = [z_spacing, 0.12, 0.12])
+        viewer.add_image(ch3, name='Ch3: Cell Fill', blending='additive', colormap='white', scale = [z_spacing, 0.12, 0.12])
+        viewer.add_image(ch4, name='Ch4: Bassoon', blending='additive', colormap='red', scale = [z_spacing, 0.12, 0.12])
         if map_check:
             map_processing(ch1, ch2, ch3, ch4, viewer)
     elif image.shape[1] == 3:  # 3-channel image
@@ -107,8 +118,39 @@ def configure_viewer(viewer, image, viewer_index):
         viewer.add_image(ch1, name='Ch1: Gephyrin', blending='additive', colormap='green', scale = [4, 1, 1])
         viewer.add_image(ch2, name='Ch2: Cell Fill', blending='additive', colormap='red', scale = [4, 1, 1])
         viewer.add_image(ch3, name='Ch3: Syntd', blending='additive', colormap='cyan', scale = [4, 1, 1]) 
+        #HOLD SHIFT while on the plane layer to drag. It should change based on what slice you are on 
+        # Below commented out lines are for getting a single plane
+        plane_parameters = {
+            'position': (32, 32, 32),
+            'normal': (1, 0, 0), #1 in the first position means that it goes through xy planes
+            'thickness': 10,
+        }
+        layer = viewer.add_image(
+            ch3,
+            rendering='mip',
+            name='plane',
+            depiction='plane',
+            blending='additive',
+            opacity=1,
+            plane=plane_parameters, 
+            colormap='cyan',
+            scale=[4, 1, 1] 
+        )
+        layer = viewer.add_image(
+            ch1,
+            rendering='mip',
+            name='plane',
+            depiction='plane',
+            blending='additive',
+            opacity=1,
+            plane=plane_parameters, 
+            colormap='green',
+            scale=[4, 1, 1] 
+        )
+
         #NORMALIZED PUNCTA DETECTION - comment in/out
-        normalized_puncta(ch1, ch2, ch3, viewer)
+        if invivo_check:
+            normalized_puncta(ch1, ch2, ch3, viewer)
         # viewer.layers['Ch1: RFP'] = [4, 1, 1]
         # viewer.layers['Ch2: Gephyrin'] = [4, 1, 1]
         # viewer.layers['Ch3: Cell Fill'] = [4, 1, 1]
@@ -122,7 +164,7 @@ def configure_viewer(viewer, image, viewer_index):
         features=INITIAL_FEATURES,
         size=7,
         edge_width=0.1,
-        edge_color='white',
+        border_color='white',
         face_color= TypeToColor.map_types_to_colors(['Default'], mapping_name)[0],  # Set initial face color directly
         text={'string': '{label}', 'size': 10, 'color': 'white', 'anchor': 'center'},
         name=f"Points Layer 1",
@@ -224,7 +266,7 @@ def normalized_puncta(ch1, ch2, ch3, viewer):
 
     # Create a mask for dendrites based on brightness range in ch1
     dendrite_mask = (ch2 >= dendritemin) & (ch2 <= dendritemax)
-    geph_mask = ch1_copy >= 4
+    geph_mask = ch1_copy >= 2
 
     # Apply the mask to normch4
     normch4_dendrites = np.where(dendrite_mask, normch4, 0)
@@ -245,17 +287,18 @@ def normalized_puncta(ch1, ch2, ch3, viewer):
     print(f"Mean intensity: {mean_intensity}")
     print(f"Standard deviation: {std_intensity}")
 
+        
     # Loop over threshold and minimum puncta size combinations -CHANGE HERE IF NEEDED
     num_stddevs_list = [x*0.5 for x in range(0, 7)]
-    for num_stddevs in range(1, 2):
+    for num_stddevs in num_stddevs_list:
         threshold = mean_intensity + num_stddevs * std_intensity
-        for min_puncta_size in range(10, 26, 15):
+        for min_puncta_size in range(3, 5):
                 # Initialize a 3D array for stacking filtered mask planes
             stacked_labels = np.zeros((z, x, y), dtype=int)
             # Process each z-plane separately
             for z_index in range(z):
                 # Create a binary mask for the current plane
-                puncta_mask_plane = normch4_gephyrin[z_index] > threshold
+                puncta_mask_plane = normch4_dendrites[z_index] > threshold
                 puncta_mask_plane = clear_border(puncta_mask_plane)
                 
                 # Label the connected components in the current plane
@@ -270,30 +313,3 @@ def normalized_puncta(ch1, ch2, ch3, viewer):
 
             layer_name = f'Thresh={num_stddevs}_MinSize={min_puncta_size}'
             viewer.add_labels(stacked_labels, name=layer_name, scale = [4, 1, 1],  blending='additive')
-
-        
-    # # Loop over threshold and minimum puncta size combinations -CHANGE HERE IF NEEDED
-    # num_stddevs_list = [x*0.5 for x in range(1, 1)] #CHANGE FOR STANDARD DEVIATION
-    # for num_stddevs in num_stddevs_list:
-    #      threshold = mean_intensity + num_stddevs * std_intensity
-    #      for min_puncta_size in range(10,25): #CHANGE FOR PUNCTA SIZE
-    #              # Initialize a 3D array for stacking filtered mask planes
-    #          stacked_labels = np.zeros((z, x, y), dtype=int)
-    #          # Process each z-plane separately
-    #          for z_index in range(z):
-    #              # Create a binary mask for the current plane
-    #              puncta_mask_plane = normch4_gephyrin[z_index] > threshold
-    #              puncta_mask_plane = clear_border(puncta_mask_plane)
-                
-    #              # Label the connected components in the current plane
-    #              labels_plane = label(puncta_mask_plane)
-                
-    #              # Filter regions and add polygons
-    #              for region in regionprops(labels_plane):
-    #                  if region.area >= min_puncta_size:
-    #                      # Create a binary mask of the current region
-    #                      region_mask = labels_plane == region.label
-    #                      stacked_labels[z_index][labels_plane == region.label] = 1
-
-    #          layer_name = f'Thresh={num_stddevs}_MinSize={min_puncta_size}'
-    #          viewer.add_labels(stacked_labels, name=layer_name, scale = [4, 1, 1],  blending='additive')
