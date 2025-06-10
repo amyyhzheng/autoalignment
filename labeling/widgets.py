@@ -217,7 +217,7 @@ class AddPointsLayerWidget(QWidget):
             INITIAL_POINTS,
             features=INITIAL_FEATURES,
             size=7,
-            edge_width=0.1,
+            border_width=0.1,
             border_color='white',
             face_color= TypeToColor.map_types_to_colors(INITIAL_FEATURES['type'], self.update_widget.mapping_name)[0],
             text={'text': 'label', 'size': 10, 'color': 'white', 'anchor': 'center'},
@@ -355,7 +355,7 @@ class AddPointsFromCSVWidget(QWidget):
                 points,
                 features=features,
                 size=7,
-                edge_width=0.1,
+                border_width=0.1,
                 border_color='white',
                 face_color = TypeToColor.map_types_to_colors(features['type'], self.update_widget.mapping_name),
                 text={'text': 'label', 'size': 10, 'color': 'white', 'anchor': 'center'},
@@ -404,7 +404,7 @@ class AddPointsFromObjectJWidget(QWidget):
         self.viewer = viewer
         self.points_layers = points_layers
         self.update_widget = update_widget
-        self.scale_factors = [1,12, 12] #Z, X, Y Scaling 
+        self.scale_factors = [1,1,1] #Z, X, Y Scaling 
 
         layout = QVBoxLayout()
 
@@ -445,10 +445,12 @@ class AddPointsFromObjectJWidget(QWidget):
         for col in ['X', 'Y', 'Z']:
             df[col] = pd.to_numeric(df[col], errors='coerce')
         df = df.dropna(subset=['X', 'Y', 'Z'])
-
+        #IMPORTANT!!!! OBJECTJ TRANSFORMS Z IN A WEIRD WAY BASED ON CHANNELS 
+        num_channels= 3
+        df['Z'] =(df['Z'].astype(int)-1)//num_channels
         # Extract coordinates
         points = df[['Z', 'Y', 'X']].to_numpy()
-
+        df['Notes'] = 1
         # Extract types from 'Session # 2' column
         types = df.get('Session # 2', '-1').fillna('-1').astype(str).to_numpy()
         mapped_types = [
@@ -458,8 +460,12 @@ class AddPointsFromObjectJWidget(QWidget):
         ]
 
         features = {
-            'label': df.get('Synapse number', 'Unknown').fillna('Unknown').astype(str).to_numpy(),
-            'type': mapped_types
+            # 'label': pd.to_numeric(df['label'], errors = 'coerce'),
+            
+            'label': df.get('Synapse number', 'Unknown').fillna('Unknown').to_numpy(),
+            'Notes': df['Notes'].to_numpy(),
+            'type': mapped_types, 
+
         }
 
         self.add_points_layer(points, features)
@@ -484,7 +490,7 @@ class AddPointsFromObjectJWidget(QWidget):
         if points_list:
             all_points = np.vstack(points_list)
             scale_z, scale_y, scale_x = self.scale_factors
-            all_points *= np.array([scale_z, scale_y, scale_x])  # Apply scaling
+            # all_points *= np.array([scale_z, scale_y, scale_x])  # Apply scaling
             all_types = np.array(types_list)
         else:
             print("No valid points found in the CSV.")
@@ -505,7 +511,7 @@ class AddPointsFromObjectJWidget(QWidget):
             points,
             features=features,
             size=7,
-            edge_width=0.1,
+            border_width=0.1,
             border_color='white',
             face_color=TypeToColor.map_types_to_colors(features['type'], self.update_widget.mapping_name),
             text={'text': 'label', 'size': 10, 'color': 'white', 'anchor': 'center'},

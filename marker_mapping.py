@@ -87,8 +87,19 @@ def getUserInput():
     FOR KENDYLL JOE EDIT FILE PATHS HERE
     
     '''    
-    marker_filename = '/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/PunctaScoring/b2/SynapseMarkers/beforeAlignment/CombinedResults.csv'
-    fiducial_fileName = '/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/PunctaScoring/b2/Fiducials/CombinedResults.csv'
+
+    #Commented out below is the objectj filenames. 
+    # marker_filename = '/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/PunctaScoring/b2/SynapseMarkers/beforeAlignment/CombinedResults.csv'
+    # fiducial_fileName = '/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/PunctaScoring/b2/Fiducials/CombinedResults.csv'
+
+    '''
+    Napari version input all of your markers as a list here
+    (Separate each file path with a comma) 
+    '''
+    marker_filenames = ['/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/PunctaScoring/b2/SynapseMarkers/beforeAlignment/CombinedResults.csv',
+                        '/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/PunctaScoring/b2/SynapseMarkers/beforeAlignment/CombinedResults.csv'
+                       ] #Example list. Input a file from each timepoint(note that landmarks can be included in this and should have type = "Landmark"
+    # fiducial_fileName = '/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/PunctaScoring/b2/Fiducials/CombinedResults.csv'
 
     xyz_fileNames['Timepoint 1'] = '/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/SNT_Tracing/Image1/SOM022Image1FullTrace_withbrancheslabeled_xyzCoordinates.csv'
     xyz_fileNames['Timepoint 2'] = '/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/SNT_Tracing/Image2/SOM022_Image2_fulltrace_withbrancheslabeled_xyzCoordinates.csv'
@@ -101,7 +112,7 @@ def getUserInput():
     # for timepoint in range(number_of_timepoints):
     #     xyz_fileNames["Timepoint " + str(timepoint+1)] = askopenfilename(title="Select the .csv file with the branch(es) xyz coordinates for time point " + str(timepoint+1))
     export_csv_directory = filedialog.askdirectory(title="Choose the folder to save the exported .csv ")
-    return number_of_timepoints, branch_ID, xyz_fileNames, marker_filename, export_csv_directory, fiducial_fileName, animal_ID
+    return number_of_timepoints, branch_ID, xyz_fileNames, marker_filenames, export_csv_directory, fiducial_fileName, animal_ID
 
 
 
@@ -167,65 +178,110 @@ def getBranchCoordinates(xyz_fileNames, branch_ID):
 
 
 # Function that reads the markers CombinedResults.csv and returns the marker type and marker coordinates, where Z is imageJ Z and not objectJ Z, across all imaging sessions.
-def getMarkersInfo(marker_fileName, number_of_timepoints):
-    '''
+# def getMarkersInfo(marker_fileName, number_of_timepoints):
+#     '''
+#     Input: 
+#         marker_fileName(str): file path to CombinedResults for markers,
+#         number_of_timepoints(int): Number of timepoints being analyzed
+#     Output: 
+#         raw_markers(list): List of lists where each list contains all markers from 
+#         each timepoint. Markers have format (markertype, (x, y, z))
+#         All markers with label 'Landmark' are excluded. All z coordinates 
+#         transformed from objectJ to imageJ coordinates. 
+    
+#     '''
+#     # raw_markers = []
+#     # file = pd.read_csv(marker_fileName)
+
+#     # for timepoint in range(number_of_timepoints):
+#     #     image = file.loc[file['ojj File Name'].str.contains("_" + ojj_tifName + str(timepoint+1), na=False)] # na=False in case there are rows with no/missing values
+#     #     timepoint_list = []
+#     #     for i in range(len(image)):
+#     #         markerType = image["Final S1"].iloc[i]
+#     #         x = image["xpos S1"].iloc[i]
+#     #         y = image["ypos S1"].iloc[i]
+#     #         objectJ_z = image["zpos S1"].iloc[i]
+#     #         imageJ_z = transformZ_ObjectJtoImageJ(objectJ_z) # Converts from objectJ to imageJ Z information
+#     #         markerInfo = (markerType, (int(x), int(y), imageJ_z))
+#     #         timepoint_list.append(tuple(markerInfo))
+
+#     #     new_markerList_noLandmarks = [item for item in timepoint_list if item[0] != 'Landmark']
+#     #     raw_markers.append(new_markerList_noLandmarks)
+#     #     print("Successfully parsed the marker type and coordinates of " + str(len(new_markerList_noLandmarks)) + " synapse markers (excluding landmarks) for Timepoint/Image " + str(timepoint+1))
+#     raw_markers = []
+#     file = pd.read_csv(marker_fileName)
+
+#     for timepoint in range(number_of_timepoints):
+#         # Napari Points typically don't encode filenames directly; adjust logic if your pipeline adds them
+#         image = file[file['name'].str.contains("_" + ojj_tifName + str(timepoint+1), na=False)] if 'name' in file.columns else file
+
+#         timepoint_list = []
+#         for i in range(len(image)):
+#             if 'markerType' in image.columns:
+#                 markerType = image["markerType"].iloc[i]
+#             elif 'label' in image.columns:
+#                 markerType = image["label"].iloc[i]
+#             else:
+#                 raise ValueError("No column found for marker type. Expected 'markerType' or 'label'.")
+
+#             x = image["axis-0"].iloc[i]
+#             y = image["axis-1"].iloc[i]
+#             z = image["axis-2"].iloc[i] if 'axis-2' in image.columns else 0
+#             imageJ_z = transformZ_ObjectJtoImageJ(z)
+#             markerInfo = (markerType, (int(x), int(y), imageJ_z))
+#             timepoint_list.append(tuple(markerInfo))
+
+#         new_markerList_noLandmarks = [item for item in timepoint_list if item[0].lower() != 'landmark']
+#         raw_markers.append(new_markerList_noLandmarks)
+#         print("Parsed " + str(len(new_markerList_noLandmarks)) + " markers (excluding landmarks) for Timepoint/Image " + str(timepoint+1))
+    
+#     return raw_markers
+#     # return raw_markers
+
+def getMarkersInfo(marker_file_list):
+    """
     Input: 
-        marker_fileName(str): file path to CombinedResults for markers,
-        number_of_timepoints(int): Number of timepoints being analyzed
+        marker_file_list (list): List of file paths to Napari-style CSVs, one per timepoint.
     Output: 
-        raw_markers(list): List of lists where each list contains all markers from 
-        each timepoint. Markers have format (markertype, (x, y, z))
-        All markers with label 'Landmark' are excluded. All z coordinates 
-        transformed from objectJ to imageJ coordinates. 
-    
-    '''
-    # raw_markers = []
-    # file = pd.read_csv(marker_fileName)
-
-    # for timepoint in range(number_of_timepoints):
-    #     image = file.loc[file['ojj File Name'].str.contains("_" + ojj_tifName + str(timepoint+1), na=False)] # na=False in case there are rows with no/missing values
-    #     timepoint_list = []
-    #     for i in range(len(image)):
-    #         markerType = image["Final S1"].iloc[i]
-    #         x = image["xpos S1"].iloc[i]
-    #         y = image["ypos S1"].iloc[i]
-    #         objectJ_z = image["zpos S1"].iloc[i]
-    #         imageJ_z = transformZ_ObjectJtoImageJ(objectJ_z) # Converts from objectJ to imageJ Z information
-    #         markerInfo = (markerType, (int(x), int(y), imageJ_z))
-    #         timepoint_list.append(tuple(markerInfo))
-
-    #     new_markerList_noLandmarks = [item for item in timepoint_list if item[0] != 'Landmark']
-    #     raw_markers.append(new_markerList_noLandmarks)
-    #     print("Successfully parsed the marker type and coordinates of " + str(len(new_markerList_noLandmarks)) + " synapse markers (excluding landmarks) for Timepoint/Image " + str(timepoint+1))
+        raw_markers (list): List of lists of (markertype, (x, y, z)) for synapse markers.
+        raw_fiducials (list): List of lists of (markertype, (x, y, z)) for fiducials (type == 'landmark').
+    """
     raw_markers = []
-    file = pd.read_csv(marker_fileName)
+    raw_fiducials = []
 
-    for timepoint in range(number_of_timepoints):
-        # Napari Points typically don't encode filenames directly; adjust logic if your pipeline adds them
-        image = file[file['name'].str.contains("_" + ojj_tifName + str(timepoint+1), na=False)] if 'name' in file.columns else file
+    for timepoint, marker_fileName in enumerate(marker_file_list):
+        file = pd.read_csv(marker_fileName)
 
-        timepoint_list = []
-        for i in range(len(image)):
-            if 'markerType' in image.columns:
-                markerType = image["markerType"].iloc[i]
-            elif 'label' in image.columns:
-                markerType = image["label"].iloc[i]
+        timepoint_markers = []
+        timepoint_fiducials = []
+
+        for i in range(len(file)):
+            if 'type' in file.columns:
+                markerType = file["type"].iloc[i]
+            elif 'label' in file.columns:
+                markerType = file["label"].iloc[i]
             else:
-                raise ValueError("No column found for marker type. Expected 'markerType' or 'label'.")
+                raise ValueError("No column found for marker type. Expected 'type' or 'label'.")
 
-            x = image["axis-0"].iloc[i]
-            y = image["axis-1"].iloc[i]
-            z = image["axis-2"].iloc[i] if 'axis-2' in image.columns else 0
+            z = file["axis-0"].iloc[i]
+            x = file["axis-1"].iloc[i]
+            y = file["axis-2"].iloc[i] if 'axis-2' in file.columns else 0
             imageJ_z = transformZ_ObjectJtoImageJ(z)
-            markerInfo = (markerType, (int(x), int(y), imageJ_z))
-            timepoint_list.append(tuple(markerInfo))
 
-        new_markerList_noLandmarks = [item for item in timepoint_list if item[0].lower() != 'landmark']
-        raw_markers.append(new_markerList_noLandmarks)
-        print("Parsed " + str(len(new_markerList_noLandmarks)) + " markers (excluding landmarks) for Timepoint/Image " + str(timepoint+1))
-    
-    return raw_markers
-    # return raw_markers
+            markerInfo = (markerType, (x, y, imageJ_z))
+
+            if markerType.lower() == "landmark":
+                timepoint_fiducials.append(markerInfo)
+            else:
+                timepoint_markers.append(markerInfo)
+
+        raw_markers.append(timepoint_markers)
+        raw_fiducials.append(timepoint_fiducials)
+
+        print(f"Timepoint {timepoint+1}: {len(timepoint_markers)} markers, {len(timepoint_fiducials)} fiducials parsed.")
+
+    return raw_markers, raw_fiducials
+
 
 # Function that reads the CombinedResults.csv for fiducials and returns the fiducial coordinates across all imaging sessions in imageJ Z (not objectJ Z)
 def getFiducialInfo(fiducial_fileName, number_of_timepoints):
@@ -486,9 +542,12 @@ def savePlot_xy():
 #################### CODE ####################
 
 # Calls functions to get branch coordinates and markers information
-number_of_timepoints, branch_ID, xyz_fileNames, marker_fileName, export_csv_directory, fiducial_fileName, animal_ID = getUserInput()
+number_of_timepoints, branch_ID, xyz_fileNames, marker_fileNames, export_csv_directory, fiducial_fileName, animal_ID = getUserInput()
 raw_branch_coordinates = getBranchCoordinates(xyz_fileNames, branch_ID) # Uses imageJ Z
-raw_markers = getMarkersInfo(marker_fileName, number_of_timepoints) # Uses imageJ Z
+raw_markers = getMarkersInfo(marker_fileNames) # Uses imageJ Z
+#Would be nice to add some sort of confirmation with timepoints and number of filenames here
+
+
 raw_fiducials_coordinates = getFiducialInfo(fiducial_fileName, number_of_timepoints) # Uses imageJ Z
 # print("raw branch coordinates =", raw_branch_coordinates)
 # print("raw markers =", raw_markers)

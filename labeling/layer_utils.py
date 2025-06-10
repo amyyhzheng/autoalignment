@@ -38,7 +38,7 @@ def assign_incremental_labels(points_layer):
         labels = points_layer.features.get('label', pd.Series(dtype=int))
 
         # Auto-increment labels for new points
-        new_label = (labels.iloc[-1] + 1) if not labels.empty else 0
+        new_label = (int(labels.iloc[-1]) + 1) if not labels.empty else 0
         points_layer.feature_defaults['label'] = new_label if num_points > 1 else 0
         print(f"Updated Labels: {points_layer.features['label']}")
 
@@ -90,66 +90,106 @@ def assign_incremental_labels(points_layer):
 #                 # time.sleep(0.05)  # Small delay to allow UI update
 #                 # layer.selected_data = set()
         
+# def enable_feature_editing(points_layer, viewer):
+#     """
+#     Enables right-click editing of the 'Notes' and 'label' features in Napari.
+#     """
+#     @points_layer.mouse_drag_callbacks.append
+#     def on_right_click(layer, event):
+#         if event.type == 'mouse_press' and event.button == 2:  # Right-click
+#             index = layer.get_value(event.position)
+
+#             if index is not None:
+#                 menu = QMenu()
+#                 edit_notes_action = menu.addAction("Edit Notes")
+#                 edit_label_action = menu.addAction("Edit Label")
+#                 action = menu.exec_(event.native.globalPos())
+
+#                 updated = False
+
+#                 if action == edit_notes_action:
+#                     current_notes = str(layer.features['Notes'].iloc[index])
+#                     new_notes, ok = QInputDialog.getText(
+#                         None, "Edit Notes", "Enter new Notes value:", text=current_notes
+#                     )
+#                     if ok:
+#                         layer.features.at[index, 'Notes'] = new_notes
+#                         updated = True
+
+#                 elif action == edit_label_action:
+#                     current_label = str(layer.features['label'].iloc[index])
+#                     new_label, ok = QInputDialog.getText(
+#                         None, "Edit Label", "Enter new label:", text=current_label
+#                     )
+#                     if ok:
+#                         layer.features.at[index, 'label'] = str(new_label)
+#                         updated = True
+
+#                 if updated:
+#                     # Explicitly re-assign text settings to trigger refresh
+#                     layer.text = {
+#                         'string': ' {label} ',
+#                         'size': 10,
+#                         'color': 'white',
+#                         'anchor': 'center',
+#                     }
+
+#                 layer.selected_data = set()
+
+#                 # Clean up cursor behavior
+#                 time.sleep(0.05)
+#                 layer.mode = 'pan_zoom'
+#                 pos = QCursor.pos()
+#                 global_pos = viewer.window._qt_viewer.canvas.mapFromGlobal(pos)
+#                 event = QMouseEvent(
+#                     QMouseEvent.MouseButtonRelease,
+#                     global_pos,
+#                     Qt.LeftButton,
+#                     Qt.LeftButton,
+#                     Qt.NoModifier
+#                 )
+#                 viewer.window._qt_viewer.canvas.mouseReleaseEvent(event)
+
 def enable_feature_editing(points_layer, viewer):
     """
-    Enables right-click editing of the 'Notes' and 'label' features in Napari.
+    Enables right-click editing of 'Notes' and 'label' features in Napari.
     """
     @points_layer.mouse_drag_callbacks.append
     def on_right_click(layer, event):
-        if event.type == 'mouse_press' and event.button == 2:  # Right-click
+        if event.type == 'mouse_press' and event.button == 2:
             index = layer.get_value(event.position)
-
             if index is not None:
                 menu = QMenu()
                 edit_notes_action = menu.addAction("Edit Notes")
                 edit_label_action = menu.addAction("Edit Label")
-                action = menu.exec_(event.native.globalPos())
+                action = menu.exec_(QCursor.pos())
 
                 updated = False
-
                 if action == edit_notes_action:
                     current_notes = str(layer.features['Notes'].iloc[index])
-                    new_notes, ok = QInputDialog.getText(
-                        None, "Edit Notes", "Enter new Notes value:", text=current_notes
-                    )
+                    new_notes, ok = QInputDialog.getText(None, "Edit Notes", "Enter new Notes:", text=current_notes)
                     if ok:
                         layer.features.at[index, 'Notes'] = new_notes
                         updated = True
 
                 elif action == edit_label_action:
                     current_label = str(layer.features['label'].iloc[index])
-                    new_label, ok = QInputDialog.getText(
-                        None, "Edit Label", "Enter new label:", text=current_label
-                    )
+                    new_label, ok = QInputDialog.getText(None, "Edit Label", "Enter new label:", text=current_label)
                     if ok:
                         layer.features.at[index, 'label'] = new_label
                         updated = True
 
                 if updated:
-                    # Explicitly re-assign text settings to trigger refresh
+                    # Refresh text display explicitly
                     layer.text = {
-                        'string': ' {label} ',
+                        'string': '{label}',
                         'size': 10,
                         'color': 'white',
                         'anchor': 'center',
                     }
+                    layer.refresh()
 
-                layer.selected_data = set()
-
-                # Clean up cursor behavior
-                time.sleep(0.05)
-                layer.mode = 'pan_zoom'
-                pos = QCursor.pos()
-                global_pos = viewer.window._qt_viewer.canvas.mapFromGlobal(pos)
-                event = QMouseEvent(
-                    QMouseEvent.MouseButtonRelease,
-                    global_pos,
-                    Qt.LeftButton,
-                    Qt.LeftButton,
-                    Qt.NoModifier
-                )
-                viewer.window._qt_viewer.canvas.mouseReleaseEvent(event)
-
+                layer.selected_data = set()  # Optional: clear selection
 
 def create_point_label_handler(points_layer, viewer):
     """
