@@ -107,13 +107,14 @@ def configure_viewer(viewer, image, viewer_index):
         #MAP Z_SPACING FOR BETTINA
         z_spacing = 0.8
         ch1, ch2, ch3, ch4 = image[:, 0, :, :], image[:, 1, :, :], image[:, 2, :, :], image[:, 3, :, :]
-        viewer.add_image(ch1, name='Ch1: RFP', blending='additive', colormap='cyan', scale = [z_spacing, 0.12, 0.12])
-        viewer.add_image(ch2, name='Ch2: Gephyrin', blending='additive', colormap='green', scale = [z_spacing, 0.12, 0.12])
-        viewer.add_image(ch3, name='Ch3: Cell Fill', blending='additive', colormap='white', scale = [z_spacing, 0.12, 0.12])
-        viewer.add_image(ch4, name='Ch4: Bassoon', blending='additive', colormap='red', scale = [z_spacing, 0.12, 0.12])
+        #PREVIOUSLY INCLUDED MAP SPACING = [z_spacing, 0.12, 0.12] for BETTINA MAP SPACING 
+        viewer.add_image(ch1, name='Ch1: RFP', blending='additive', colormap='cyan')
+        viewer.add_image(ch2, name='Ch2: Gephyrin', blending='additive', colormap='green')
+        viewer.add_image(ch3, name='Ch3: Cell Fill', blending='additive', colormap='white')
+        viewer.add_image(ch4, name='Ch4: Bassoon', blending='additive', colormap='red')
         if map_check:
             map_processing(ch1, ch2, ch3, ch4, viewer)
-    elif image.shape[1] == 3:  # 3-channel image
+    else:  # 3-channel image
         ch1, ch2, ch3 = image[:, 0, :, :], image[:, 1, :, :], image[:, 2, :, :]
         viewer.add_image(ch1, name='Ch1: Gephyrin', blending='additive', colormap='green', scale = [4, 1, 1])
         viewer.add_image(ch2, name='Ch2: Cell Fill', blending='additive', colormap='red', scale = [4, 1, 1])
@@ -154,8 +155,8 @@ def configure_viewer(viewer, image, viewer_index):
         # viewer.layers['Ch1: RFP'] = [4, 1, 1]
         # viewer.layers['Ch2: Gephyrin'] = [4, 1, 1]
         # viewer.layers['Ch3: Cell Fill'] = [4, 1, 1]
-    else:
-        raise ValueError(f"Unsupported number of channels: {image.shape[1]}")
+    # else:
+    #     raise ValueError(f"Unsupported number of channels: {image.shape[1]}")
 
     # Initialize points layers and UpdatePointTypeWidget
     points_layers = {}
@@ -163,7 +164,7 @@ def configure_viewer(viewer, image, viewer_index):
         INITIAL_POINTS,
         features=INITIAL_FEATURES,
         size=7,
-        edge_width=0.1,
+        border_width=0.1,
         border_color='white',
         face_color= TypeToColor.map_types_to_colors(['Default'], mapping_name)[0],  # Set initial face color directly
         text={'string': '{label}', 'size': 10, 'color': 'white', 'anchor': 'center'},
@@ -205,30 +206,30 @@ def configure_viewer(viewer, image, viewer_index):
 def map_processing(ch1, ch2, ch3, ch4, viewer):
 
         # Thresholding Gephyrin (Ch1), Bassoon (Ch4), and Cell Fill (Ch3) channels using Otsu's method
-        thresh_ch1 = threshold_otsu(ch1)
+        thresh_ch2 = threshold_otsu(ch2)
         thresh_ch4 = threshold_otsu(ch4)
         thresh_ch3 = threshold_otsu(ch3)
 
         # Apply thresholds
-        ch1_thresholded = ch1 > thresh_ch1
+        ch2_thresholded = ch1 > thresh_ch2
         ch4_thresholded = ch4 > thresh_ch4
         ch3_thresholded = ch3 > thresh_ch3  # Cell Fill thresholded mask
 
         # Find colocalization (where both Gephyrin and Bassoon are above their thresholds)
-        colocalization = np.logical_and(ch1_thresholded, ch4_thresholded)
+        colocalization = np.logical_and(ch2_thresholded, ch4_thresholded)
 
         # Label the connected components in the thresholded images
-        labeled_ch1 = label(ch1_thresholded)
+        labeled_ch2 = label(ch2_thresholded)
         labeled_ch4 = label(ch4_thresholded)
         labeled_colocalization = label(colocalization)
 
         # Compute region properties (e.g., centroids) for each labeled region
-        regions_ch1 = regionprops(labeled_ch1)
+        regions_ch2 = regionprops(labeled_ch2)
         regions_ch4 = regionprops(labeled_ch4)
         regions_colocalization = regionprops(labeled_colocalization)
 
         # Extract centroids from the regions
-        centroids_ch1 = [region.centroid for region in regions_ch1]
+        centroids_ch2 = [region.centroid for region in regions_ch2]
         centroids_ch4 = [region.centroid for region in regions_ch4]
         centroids_colocalization = [region.centroid for region in regions_colocalization]
 
@@ -238,7 +239,7 @@ def map_processing(ch1, ch2, ch3, ch4, viewer):
         filtered_centroids = [region.centroid for region in filtered_regions]
 
         # Add thresholded Gephyrin and Bassoon images
-        viewer.add_image(ch1_thresholded, name='Ch1: Gephyrin Thresholded', blending='additive', colormap='green')
+        viewer.add_image(ch2_thresholded, name='Ch1: Gephyrin Thresholded', blending='additive', colormap='green')
         viewer.add_image(ch4_thresholded, name='Ch4: Bassoon Thresholded', blending='additive', colormap='red')
         viewer.add_image(ch3_thresholded, name='Ch3: Cell Fill Thresholded', blending='additive', colormap='white')
 
