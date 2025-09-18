@@ -163,7 +163,7 @@ def configure_viewer(viewer, image, viewer_index):
         INITIAL_POINTS,
         features=INITIAL_FEATURES,
         size=7,
-        edge_width=0.1,
+        border_width=0.1,
         border_color='white',
         face_color= TypeToColor.map_types_to_colors(['Default'], mapping_name)[0],  # Set initial face color directly
         text={'string': '{label}', 'size': 10, 'color': 'white', 'anchor': 'center'},
