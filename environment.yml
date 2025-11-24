@@ -2,21 +2,11 @@ name: napari-env
 channels:
   - conda-forge
 dependencies:
-  - bzip2=1.0.8
-  - ca-certificates=2025.7.14
-  - libexpat=2.7.1
-  - libffi=3.4.6
-  - liblzma=5.8.1
-  - libsqlite=3.50.2
-  - libzlib=1.3.1
-  - ncurses=6.5
-  - openssl=3.5.1
-  - pip=25.1.1
-  - python=3.12.11
-  - readline=8.2
-  - setuptools=80.9.0
-  - tk=8.6.13
-  - wheel=0.45.1
+  - python=3.12
+  - pip
+  - qt
+  - pyqt
+
   - pip:
       - alabaster==1.0.0
       - annotated-types==0.7.0
@@ -168,4 +158,3 @@ dependencies:
       - wrapt==1.17.2
       - xyzservices==2025.4.0
       - zarr==3.1.0
-prefix: /Users/amyzheng/miniforge3/envs/flowsom
