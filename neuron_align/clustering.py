@@ -56,7 +56,7 @@ def _kmeans_once(centroids, distance_data, final_marker_distance):
     return current, cmap
 
 
-def _split_if_needed(centroids, cmap, max_spread=2.0):
+def _split_if_needed(centroids, cmap, max_spread=3.0):
     # Enforce: at most one point per timepoint per cluster; and cluster spread ≤ max_spread µm
     # if violated, split out the worst offender as new centroid
     for cid, tuples in list(cmap.items()):
