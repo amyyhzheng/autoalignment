@@ -94,15 +94,68 @@ def export_all(settings: Settings, result: ComputationResult,
         wr.writerows(rows)
 
     # Per-timepoint napari-friendly CSVs
+    # by_tp = {}
+    # for row in rows:
+    #     tp = row[0].replace("Image", "")
+    #     nap = [row[5], row[4], row[3], row[1], row[2]]  # z,y,x,label,type
+    #     by_tp.setdefault(tp, []).append(nap)
+
+        
+    # # header = ["axis-0","axis-1","axis-2","label","type"]#changed to be axis 0, 1, 2 for napari
+    # # for tp, nap_rows in by_tp.items():
+    # #     path = os.path.join(auto_dir, f"{settings.animal_id}_b{settings.branch_id}_timepoint{tp}_napari.csv")
+    # #     with open(path, 'w', newline='') as f:
+    # #         wr = csv.writer(f); wr.writerow(header); wr.writerows(nap_rows)
+
+    # header = ["index", "axis-0", "axis-1", "axis-2", "label", "type", "Notes"]
+
+    # for tp, nap_rows in by_tp.items():
+    #     path = os.path.join(
+    #         auto_dir,
+    #         f"{settings.animal_id}_b{settings.branch_id}_timepoint{tp}_napari.csv"
+    #     )
+    #     with open(path, 'w', newline='') as f:
+    #         wr = csv.writer(f)
+    #         wr.writerow(header)
+    #         for i, row in enumerate(nap_rows, start=1):
+    #             wr.writerow(row + [i, ""])
+    # return out_csv
     by_tp = {}
     for row in rows:
         tp = row[0].replace("Image", "")
-        nap = [row[5], row[4], row[3], row[1], row[2]]  # z,y,x,label,type
+
+        z = row[5]
+        y = row[4]
+        x = row[3]
+        marker_id = row[1]
+        marker_type = row[2]
+
+        # For landmarks, override type + label for napari
+        if marker_type == "Landmark":
+            # strip "Marker" prefix -> just the number
+            label = str(marker_id).replace("Marker", "")
+            mtype = "Ambiguous"
+        else:
+            label = marker_id
+            mtype = marker_type
+
+        # z, y, x, label, type
+        nap = [z, y, x, label, mtype]
         by_tp.setdefault(tp, []).append(nap)
-    header = ["axis-0","axis-1","axis-2","label","type"]#changed to be axis 0, 1, 2 for napari
+
+    # axis-0/1/2, label, type + index, Notes
+    header = ["axis-0", "axis-1", "axis-2", "label", "type", "index", "Notes"]
+
     for tp, nap_rows in by_tp.items():
-        path = os.path.join(auto_dir, f"{settings.animal_id}_b{settings.branch_id}_timepoint{tp}_napari.csv")
+        path = os.path.join(
+            auto_dir,
+            f"{settings.animal_id}_b{settings.branch_id}_timepoint{tp}_napari.csv",
+        )
         with open(path, 'w', newline='') as f:
-            wr = csv.writer(f); wr.writerow(header); wr.writerows(nap_rows)
+            wr = csv.writer(f)
+            wr.writerow(header)
+            for i, row in enumerate(nap_rows, start=1):
+                # row = [axis-0, axis-1, axis-2, label, type]
+                wr.writerow(row + [i, ""])
 
     return out_csv
