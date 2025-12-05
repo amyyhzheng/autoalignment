@@ -75,10 +75,10 @@ def export_all(settings: Settings, result: ComputationResult,
     rows = []
     next_id = 1
     if shaft_clusters:
-        part, next_id = clusters_to_csv_rows(shaft_clusters, "InhibitoryShaft", "Nothing", next_id, False, settings, result)
+        part, next_id = clusters_to_csv_rows(shaft_clusters, "Shaft_Geph+Bsn_NoSynTd", "Shaft_SyntdNotScored", next_id, False, settings, result)
         rows.extend(part)
     if spine_clusters:
-        part, next_id = clusters_to_csv_rows(spine_clusters, "SpinewithInhSynapse", "NudeSpine", next_id, True, settings, result)
+        part, next_id = clusters_to_csv_rows(spine_clusters, "Spine_Geph+Bsn_NoSynTd", "Spine_SyntdNotScored", next_id, True, settings, result)
         rows.extend(part)
 
     # Landmarks
@@ -99,7 +99,7 @@ def export_all(settings: Settings, result: ComputationResult,
         tp = row[0].replace("Image", "")
         nap = [row[5], row[4], row[3], row[1], row[2]]  # z,y,x,label,type
         by_tp.setdefault(tp, []).append(nap)
-    header = ["z","y","x","label","type"]
+    header = ["axis-0","axis-1","axis-2","label","type"]#changed to be axis 0, 1, 2 for napari
     for tp, nap_rows in by_tp.items():
         path = os.path.join(auto_dir, f"{settings.animal_id}_b{settings.branch_id}_timepoint{tp}_napari.csv")
         with open(path, 'w', newline='') as f:
