@@ -1,9 +1,11 @@
-
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 import napari
+import networkx as nx
+from scipy.spatial import cKDTree
+
 
 def load_napari_points_as_xyz(csv_path: str) -> np.ndarray:
     """
@@ -82,11 +84,11 @@ def plot_branches_and_landmarks_3d(df_ref, df_mov, A_xyz, B_xyz, title):
 
 # LOAD TRACES
 df_ref = pd.read_csv('/Users/amyzheng/Desktop/coronalsectionplot/3562Trace/3562_10xOverview_A01_G003_0001_2_xyzCoordinates.csv')
-df_mov = pd.read_csv('/Users/amyzheng/Desktop/coronalsectionplot/3562Trace/3562_60x_Cell1_A01_G008_0001_apical3_xyzCoordinates.csv')
+df_mov = pd.read_csv('/Users/amyzheng/Desktop/coronalsectionplot/3562Trace/3562_60x_Cell1_A01_G009_0001_apical4_xyzCoordinates - Copy (3).csv')
 
 # LANDMARK CSVs (napari format)
-A = load_napari_points_as_xyz('/Users/amyzheng/Desktop/coronalsectionplot/apical3new.csv')     # reference
-B = load_napari_points_as_xyz('/Users/amyzheng/Desktop/coronalsectionplot/apical3map.csv')  # moving
+A = load_napari_points_as_xyz('/Users/amyzheng/Desktop/coronalsectionplot/apical4refnew4.csv')     # reference
+B = load_napari_points_as_xyz('/Users/amyzheng/Desktop/coronalsectionplot/apical4mapnew3.csv')  # moving
 
 # FIT TRANSFORM
 R, t = rigid_transform_3d(A, B)
@@ -95,7 +97,7 @@ R, t = rigid_transform_3d(A, B)
 df_mov_aligned = df_mov.copy()
 df_mov_aligned[["x","y","z"]] = apply_rigid(df_mov[["x","y","z"]].to_numpy(), R, t)
 
-extra_points_csv ='/Users/amyzheng/Desktop/coronalsectionplot/Amy/3562_60x_Cell1_A01_G008_0001_apical3.csv'
+extra_points_csv ='/Users/amyzheng/Desktop/coronalsectionplot/Amy/3562_60x_Cell1_A01_G009_0001_apical4.csv'
 extra_xyz = load_napari_points_as_xyz(extra_points_csv)
 extra_xyz_aligned = apply_rigid(extra_xyz, R, t)
 
@@ -113,7 +115,7 @@ def rand_color(name: str):
     rng = np.random.default_rng(seed)
     return rng.random(3)
 
-# 10x ref: if it has path, color per path; else single layer
+# # 10x ref: if it has path, color per path; else single layer
 if "path" in df_ref.columns:
     for path_name, g in df_ref.groupby("path"):
         pts_zyx = g[["z", "y", "x"]].to_numpy(dtype=float)
@@ -158,7 +160,7 @@ else:
 
 # extra napari points after transform
 viewer.add_points(
-    extra_xyz_aligned[:, [2,1,0]],  # XYZ → ZYX
+    extra_xyz_aligned[:, [2,1,0]],
     name="extra_points_aligned",
     size=8,
     face_color=[1.0, 0.2, 0.2],
@@ -166,3 +168,103 @@ viewer.add_points(
 )
 
 napari.run()
+
+def build_dendrite_tree_from_xyz_df(full_trace_df: pd.DataFrame,
+                                   branch_col: str = "path",
+                                   coord_cols=("x","y","z"),
+                                   max_edge_length=5.0,
+                                   reference_point=None):
+    """
+    Build a dendrite graph from a trace dataframe.
+    Nodes are XYZ tuples. Edges connect consecutive points within each branch/path.
+    Optionally add a 'center' node by taking the centroid of the closest terminal nodes
+    (one per connected component) to a provided reference_point.
+    """
+    G = nx.Graph()
+
+    if branch_col in full_trace_df.columns:
+        groups = full_trace_df.groupby(branch_col)
+    else:
+        # treat all rows as one branch if no branch column
+        groups = [(0, full_trace_df)]
+
+    for branch_id, group in groups:
+        coords = group.loc[:, coord_cols].dropna().to_numpy(dtype=float)
+        if len(coords) < 2:
+            continue
+
+        for i in range(len(coords) - 1):
+            p1 = tuple(coords[i])
+            p2 = tuple(coords[i + 1])
+            if p1 == p2:
+                continue
+            dist = float(np.linalg.norm(coords[i] - coords[i + 1]))
+            if dist < max_edge_length:
+                G.add_edge(p1, p2, weight=dist)
+
+    center = None
+    if reference_point is not None and len(G) > 0:
+        reference_point = np.asarray(reference_point, dtype=float)
+        components = list(nx.connected_components(G))
+        closest_terminal_nodes = []
+
+        for comp in components:
+            terminal_nodes = [node for node in comp if G.degree[node] == 1]
+            if not terminal_nodes:
+                continue
+            terminal_coords = np.array(terminal_nodes, dtype=float)
+            dists = np.linalg.norm(terminal_coords - reference_point[None, :], axis=1)
+            closest_terminal_nodes.append(terminal_nodes[int(np.argmin(dists))])
+
+        if closest_terminal_nodes:
+            closest_coords = np.array(closest_terminal_nodes, dtype=float)
+            center = tuple(np.mean(closest_coords, axis=0))
+            G.add_node(center)
+            for node in closest_terminal_nodes:
+                dist = float(np.linalg.norm(np.asarray(node) - np.asarray(center)))
+                G.add_edge(node, center, weight=dist)
+
+    return G, center
+
+
+def find_nearest_node(coord_xyz, kdtree, node_coords):
+    dist, idx = kdtree.query(np.asarray(coord_xyz, dtype=float))
+    return tuple(node_coords[idx]), float(dist)
+
+# df_ref must have columns x,y,z (and optionally path)
+G10x, center10x = build_dendrite_tree_from_xyz_df(
+    df_ref,
+    branch_col="path" if "path" in df_ref.columns else "__no_path__",
+    coord_cols=("x","y","z"),
+    max_edge_length=5.0,
+    # pick a reference point only if you want a center node; otherwise set None
+    reference_point=None
+)
+
+node_coords = np.array(list(G10x.nodes), dtype=float)
+kdtree = cKDTree(node_coords)
+
+extra_xyz = np.asarray(extra_xyz_aligned, dtype=float)  # (N,3) XYZ
+nearest_nodes = []
+nearest_dists = []
+
+for p in extra_xyz:
+    nn, d = find_nearest_node(p, kdtree, node_coords)
+    nearest_nodes.append(nn)
+    nearest_dists.append(d)
+
+nearest_nodes = np.array(nearest_nodes, dtype=float)  # (N,3)
+nearest_dists = np.array(nearest_dists, dtype=float)
+
+# Save results 
+matches = pd.DataFrame({
+    "extra_i": np.arange(len(extra_xyz)),
+    "extra_x": extra_xyz[:,0],
+    "extra_y": extra_xyz[:,1],
+    "extra_z": extra_xyz[:,2],
+    "nearest10x_x": nearest_nodes[:,0],
+    "nearest10x_y": nearest_nodes[:,1],
+    "nearest10x_z": nearest_nodes[:,2],
+    "euclid_dist_to_graph_node": nearest_dists
+})
+print(matches.sort_values("euclid_dist_to_graph_node").head(10))
