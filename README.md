@@ -1,9 +1,10 @@
 **In Vivo Analysis Code**
-- Currently contains custom widgets/visualization tools for labeling/data management
+- Currently contains custom widgets/visualization tools for labeling/data management - This includes the equivilant of objectj implemented in napari/python
 - Contains normalized puncta detection across different thresholds and connected components
+- neuron_align contains full clustering, autolandmark detection, diagnostic plots for alignment across time sections
 - MAP puncta detection
 - Spline fitting for tracing visualization
-- Auto alignment script to cluster and match puncta across development 
+- coronal section alignment between 60x/10x/invivo using SNT Tracing
 
 labeling
 run all python files individually, then run main.py last. When making local changes to a file, run this file again and then run main.py
