@@ -6,6 +6,7 @@ from config import Settings
 from computation import compute
 from clustering import separate_shaft_spine, choose_best_clustering, export_grouping_csv
 from mapping import export_all
+from geometry import plot_branch_and_synapses
 
 # quick 2D plots
 from viz_helpers import (
@@ -26,32 +27,31 @@ def main():
     # ---------------------------
     settings = Settings(
         animal_id="SOM022",
-        branch_id="2",
-        n_timepoints=6,
+        branch_id="3",
+        n_timepoints=5,
         branch_csvs={
-            "Timepoint 1": Path('/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/SNT_Tracing/Image1/SOM022Image1FullTrace_withbrancheslabeled_xyzCoordinates.csv'),
-            "Timepoint 2": Path('/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/SNT_Tracing/Image2/SOM022_Image2_fulltrace_withbrancheslabeled_xyzCoordinates.csv'),
-            "Timepoint 3": Path('/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/SNT_Tracing/Image3/SOM022Image3_fulltrace_withbrancheslabeled_xyzCoordinates.csv'),
-            "Timepoint 4": Path('/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/SNT_Tracing/Image4/SOM022Image4_fulltrace_withbrancheslabeled_xyzCoordinates.csv'),
-            "Timepoint 5": Path('/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/SNT_Tracing/Image5/SOM022Image5_fulltrace_withbrancheslabeled_xyzCoordinates.csv'),
-            "Timepoint 6": Path('/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/SNT_Tracing/Image6/SOM022Image6fulltrace_withbrancheslabeled_xyzCoordinates.csv'),
+            "Timepoint 1": Path('/Volumes/nedividata/Joe/2p_data/SOM/ThirdRound/SOM026_DOB081520_RV/Analysis/Analysis_withAmyCode/SNTTrace/Image1/SOM026_Image1_Trace_xyzCoordinates.csv'),
+            "Timepoint 2": Path('/Volumes/nedividata/Joe/2p_data/SOM/ThirdRound/SOM026_DOB081520_RV/Analysis/Analysis_withAmyCode/SNTTrace/Image2/SOM026_Image2_Trace_xyzCoordinates.csv'),
+            "Timepoint 3": Path('/Volumes/nedividata/Joe/2p_data/SOM/ThirdRound/SOM026_DOB081520_RV/Analysis/Analysis_withAmyCode/SNTTrace/Image3/SOM026_Image3_Trace_xyzCoordinates.csv'),
+            "Timepoint 4": Path('/Volumes/nedividata/Joe/2p_data/SOM/ThirdRound/SOM026_DOB081520_RV/Analysis/Analysis_withAmyCode/SNTTrace/Image4/SOM026_Image4_Trace_xyzCoordinates.csv'),
+            "Timepoint 5": Path('/Volumes/nedividata/Joe/2p_data/SOM/ThirdRound/SOM026_DOB081520_RV/Analysis/Analysis_withAmyCode/SNTTrace/Image5/SOM026_Image5_Trace_xyzCoordinates.csv')
         },
         marker_csvs=[
-            Path('/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/PunctaScoring/b2/SynapseMarkers/beforeAlignment/SOM022_b2_Image1.csv'),
-            Path('/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/PunctaScoring/b2/SynapseMarkers/beforeAlignment/SOM022_b2_Image2.csv'),
-            Path('/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/PunctaScoring/b2/SynapseMarkers/beforeAlignment/SOM022_b2_Image3.csv'),
-            Path('/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/PunctaScoring/b2/SynapseMarkers/beforeAlignment/SOM022_b2_Image4.csv'),
-            Path('/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/PunctaScoring/b2/SynapseMarkers/beforeAlignment/SOM022_b2_Image5.csv'),
-            Path('/Volumes/nedividata/Amy/files_for_amy_fromJoe/example_analysis_SOM022/PunctaScoring/b2/SynapseMarkers/beforeAlignment/SOM022_b2_Image6.csv'),
+            Path('/Volumes/nedividata/Joe/2p_data/SOM/ThirdRound/SOM026_DOB081520_RV/Analysis/Analysis_withAmyCode/PunctaScoring/branch3/SOM026_Image1_branch3.csv'),
+            Path('/Volumes/nedividata/Joe/2p_data/SOM/ThirdRound/SOM026_DOB081520_RV/Analysis/Analysis_withAmyCode/PunctaScoring/branch3/SOM026_Image2_branch3.csv'),
+            Path('/Volumes/nedividata/Joe/2p_data/SOM/ThirdRound/SOM026_DOB081520_RV/Analysis/Analysis_withAmyCode/PunctaScoring/branch3/SOM026_Image3_branch3.csv'),
+            Path('/Volumes/nedividata/Joe/2p_data/SOM/ThirdRound/SOM026_DOB081520_RV/Analysis/Analysis_withAmyCode/PunctaScoring/branch3/SOM026_Image4_branch3.csv'),
+            Path('/Volumes/nedividata/Joe/2p_data/SOM/ThirdRound/SOM026_DOB081520_RV/Analysis/Analysis_withAmyCode/PunctaScoring/branch3/SOM026_Image5_branch3.csv'),
         ],
         fiducials_csv=Path(''),
-        export_dir=Path("exports"),
-        scaling_factor=[0.25, 0.25, 1],
+        export_dir='/Users/amyzheng/Desktop/autoalignment-main 6/neuron_align/what',
+        #Joe scaling is 1,1,4 but the other scalin g is 0.250.25 1
+        scaling_factor=[1, 1, 1],
         num_channels=4,
-        inhibitory_shaft="InhibitoryShaft",
-        inhibitory_spine="spinewithInhsynapse",
+        inhibitory_shaft="Shaft_SyntdNotScored",
+        inhibitory_spine="Spine_SyntdNotScored",
         ojj_tif_key="Image",
-        snt_branch_fmt="b%s",
+        snt_branch_fmt="branch%s",
     )
 
     # ---------------------------
@@ -59,11 +59,25 @@ def main():
     # ---------------------------
     res = compute(settings)
 
+    # Plot branch and raw synapse coordinates for a timepoint before clustering
+    tp = 0  # Change this to visualize other timepoints
+    branch_points = res.raw_branch[tp]
+
+    synapse_points = [coord for _type, coord in res.raw_markers[tp]]
+    for i in range(200):
+        print('hi')
+    print(f'{synapse_points}synapse_points')
+    plot_branch_and_synapses(branch_points, synapse_points)
+
+
     # quick sanity plots (pre-clustering)
     # if DO_PLOTS:
     #     # pick a TP to inspect (0-based; 0 == Timepoint 1)
     #     for tp_to_show in range(0, settings.n_timepoints):
-    #         plot_branch_and_fiducials(res, tp=tp_to_show, show_markers=True)
+    #         plot_branch_and_fiducials(    from neuron_align.ge    import matplotlib.pyplot as plt
+
+
+
     #         # plot_markers_along_branch_with_ids()
     #         plot_markers_along_branch(res, title="Markers along branch (scaled) across TPs")
     #         plot_segment_scaling(res, tp=tp_to_show)
@@ -81,15 +95,14 @@ def main():
         if shaft_grouping:
             shaft_clusters = export_grouping_csv(
                 shaft_grouping,
-                settings.export_dir / "autoAlignment" / f"{settings.animal_id}_b{settings.branch_id}_inhibitoryshaft_grouping.csv",
+                '/Users/amyzheng/Desktop/autoalignment-main 6/neuron_align/what/inhibitoryshaft_grouping.csv',
             )
-
     if any(spine_d):
         spine_grouping = choose_best_clustering(spine_d, res.final_marker_distance)
         if spine_grouping:
             spine_clusters = export_grouping_csv(
                 spine_grouping,
-                settings.export_dir / "autoAlignment" / f"{settings.animal_id}_b{settings.branch_id}_inhibitoryspine_grouping.csv",
+                '/Users/amyzheng/Desktop/autoalignment-main 6/neuron_align/what/inhibitoryshaft_grouping.csv',
             )
 
 
@@ -112,7 +125,6 @@ def main():
 
     if DO_PLOTS:
         for tp_to_show in range(0, 6): # Timepoint 1
-
             if shaft_clusters:
                 plot_branch_with_cluster_ids(
                     res,

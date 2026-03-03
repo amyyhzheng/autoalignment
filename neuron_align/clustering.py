@@ -15,6 +15,9 @@ def separate_shaft_spine(settings: Settings, result: ComputationResult):
         zp = list(zip(types, dists))
         shaft_tp = [d for t, d in zp if str(t).lower() == settings.inhibitory_shaft.lower()]
         spine_tp = [d for t, d in zp if str(t).lower() == settings.inhibitory_spine.lower()]
+        print(f"Timepoint: shaft distances: {shaft_tp}, spine distances: {spine_tp}")
+        print(f"Timepoint: shaft types: {[t for t, _ in zp if str(t).lower() == settings.inhibitory_shaft.lower()]}, spine types: {[t for t, _ in zp if str(t).lower() == settings.inhibitory_spine.lower()]}")
+
         if len(shaft_tp) != len(set(shaft_tp)):
             raise ValueError("Duplicate distances for shafts within same timepoint")
         if len(spine_tp) != len(set(spine_tp)):

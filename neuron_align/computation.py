@@ -406,10 +406,13 @@ class ComputationResult:
 
 
 def _normalize_and_scale(branch, markers, fiducials, scale):
-    minx = min(pt[0] for pt in branch)
-    miny = min(pt[1] for pt in branch)
-    minz = min(pt[2] for pt in branch)
-
+    # minx = min(pt[0] for pt in branch)
+    # miny = min(pt[1] for pt in branch)
+    # minz = min(pt[2] for pt in branch)
+    #Changed this !
+    minx = 0
+    miny = 0
+    minz = 0
     def _xf(c):
         return (
             (c[0] - minx) * scale[0],
@@ -424,9 +427,10 @@ def _branch_points_from_csvs(settings: Settings) -> List[List[Coord]]:
     raw = []
     for i in range(settings.n_timepoints):
         df = read_branch_csv(
-            settings.branch_csvs[f"Timepoint {i+1}"],
-            settings.snt_branch_fmt % settings.branch_id,
+        settings.branch_csvs[f"Timepoint {i+1}"],
+        'branch3'
         )
+        print(f'read branch CSV for Timepoint {i+1}: {(df)} points')
         x, y, z = df["x"].values, df["y"].values, df["z"].values
         raw.append(fit_branch_spline(x, y, z, n_points=100))
     return raw
@@ -437,9 +441,11 @@ def compute(settings: Settings) -> ComputationResult:
     # 1. Load raw data
     # --------------------------------------------------------
     raw_branch = _branch_points_from_csvs(settings)
+
     raw_markers, raw_fids_typed = read_markers_csv_list(
         settings.marker_csvs, settings.num_channels
     )
+
     # No manual fiducials file anymore
 
     # Strip types for markers into parallel arrays
