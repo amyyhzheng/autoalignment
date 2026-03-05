@@ -428,7 +428,7 @@ def _branch_points_from_csvs(settings: Settings) -> List[List[Coord]]:
     for i in range(settings.n_timepoints):
         df = read_branch_csv(
         settings.branch_csvs[f"Timepoint {i+1}"],
-        'branch3'
+        settings.snt_branch_fmt % settings.branch_id
         )
         print(f'read branch CSV for Timepoint {i+1}: {(df)} points')
         x, y, z = df["x"].values, df["y"].values, df["z"].values
