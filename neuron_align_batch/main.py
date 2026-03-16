@@ -49,13 +49,24 @@ def collect_marker_csvs_by_image(branch_dir: Path) -> dict[int, Path]:
     If multiple CSVs map to the same Image#, keep the shortest filename (usually canonical).
     """
     by_img: dict[int, Path] = {}
-    for p in branch_dir.glob("*.csv"):
+    # for p in branch_dir.glob("*.csv"):
+    #     idx = extract_image_index(p)
+    #     if idx is None:
+    #         continue
+    #     if idx not in by_img or len(p.name) < len(by_img[idx].name):
+    #         by_img[idx] = p
+
+    #Changed to only bouton overlap csv
+    for p in branch_dir.glob("*bouton*.csv"):
         idx = extract_image_index(p)
         if idx is None:
             continue
+
         if idx not in by_img or len(p.name) < len(by_img[idx].name):
             by_img[idx] = p
+
     return by_img
+
 
 
 def collect_trace_csv_by_image(snt_root: Path) -> dict[int, Path]:
@@ -157,10 +168,15 @@ def run_one_branch(parent_dir: Path, branch_dir: Path, output_root: Path) -> Non
 
     # ---------------------------
     # clustering
-    # ---------------------------
-    shaft_d, spine_d = separate_shaft_spine(settings, res)
+    shaft_markers, spine_markers = separate_shaft_spine(settings, res)
 
-    shaft_clusters = spine_clusters = None
+    shaft_d = [[m["distance"] for m in tp] for tp in shaft_markers]
+    spine_d = [[m["distance"] for m in tp] for tp in spine_markers]
+
+    shaft_clusters = []
+    spine_clusters = []
+
+    next_cluster_id = 0
 
     if any(shaft_d):
         shaft_grouping = choose_best_clustering(shaft_d, res.final_marker_distance)
@@ -168,7 +184,11 @@ def run_one_branch(parent_dir: Path, branch_dir: Path, output_root: Path) -> Non
             shaft_clusters = export_grouping_csv(
                 shaft_grouping,
                 str(run_out / "inhibitory_shaft_grouping.csv"),
+                start_id=next_cluster_id,
+                group_type=settings.inhibitory_shaft,
+                metadata_out=str(run_out / "inhibitory_shaft_grouping_metadata.csv"),
             )
+            next_cluster_id += len(shaft_clusters)
 
     if any(spine_d):
         spine_grouping = choose_best_clustering(spine_d, res.final_marker_distance)
@@ -176,8 +196,10 @@ def run_one_branch(parent_dir: Path, branch_dir: Path, output_root: Path) -> Non
             spine_clusters = export_grouping_csv(
                 spine_grouping,
                 str(run_out / "inhibitory_spine_grouping.csv"),
+                start_id=next_cluster_id,
+                group_type=settings.inhibitory_spine,
+                metadata_out=str(run_out / "inhibitory_spine_grouping_metadata.csv"),
             )
-
     # ---------------------------
     # plots -> save to disk
     # ---------------------------
