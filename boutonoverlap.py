@@ -210,6 +210,7 @@ def run_one_branch(
         disk_areas[i] = len(rr)
         overlap_counts[i] = int(boutons_mask[zi, rr, cc].sum())
 
+
     out_df = df.copy()
     out_df["snapped_axis-0"] = pts_snapped_all[:, 0]
     out_df["snapped_axis-1"] = pts_snapped_all[:, 1]
@@ -217,11 +218,28 @@ def run_one_branch(
     out_df[f"disk_area_px_r{disk_r}"] = disk_areas
     out_df[f"bouton_overlap_px_r{disk_r}"] = overlap_counts
     out_df[f"bouton_overlap_frac_r{disk_r}"] = overlap_counts / np.clip(disk_areas, 1, None)
-
+    
+    type_col = "type"
+    overlap_col = f"bouton_overlap_px_r{disk_r}"
+    
+    if type_col in out_df.columns:
+        has_overlap = out_df[overlap_col] > 0
+    
+        out_df.loc[
+            has_overlap & (out_df[type_col] == "Shaft_SyntdNotScored"),
+            type_col
+        ] = "Shaft_SynTd"
+    
+        out_df.loc[
+            has_overlap & (out_df[type_col] == "Spine_SyntdNotScored"),
+            type_col
+        ] = "Spine_SynTd"
+    else:
+        print(f"[WARN] No '{type_col}' column found in {csv_path.name}; skipped type update")
+    
     out_csv = csv_path.with_name(csv_path.stem + "_snapped_bouton_overlap.csv")
     out_df.to_csv(out_csv, index=False)
     print("wrote:", out_csv)
-
     return out_df
 
 
