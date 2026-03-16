@@ -1,0 +1,61 @@
+def get_pixel_boundaries(region):
+    """
+    Given a set of pixel center coordinates, return a set of boundary edges.
+    
+    :param region: List of (x, y) tuples representing pixel centers
+    :return: Set of half-integer coordinate edges forming the boundary
+    """
+    pixel_set = set(region)
+    edges = set()
+
+    for x, y in region:
+        left   = (x - 0.5, y)
+        right  = (x + 0.5, y)
+        top    = (x, y + 0.5)
+        bottom = (x, y - 0.5)
+
+        # Add edges only if they are not shared with another pixel
+        if (x-1, y) not in pixel_set:
+            edges.add(left)
+        if (x+1, y) not in pixel_set:
+            edges.add(right)
+        if (x, y-1) not in pixel_set:
+            edges.add(bottom)
+        if (x, y+1) not in pixel_set:
+            edges.add(top)
+
+    return edges
+
+
+def dfs_ordered_boundary(edges):
+    """
+    Perform DFS traversal to order the boundary points.
+    
+    :param edges: Set of boundary edges
+    :return: Ordered list of boundary points
+    """
+    edges = set(edges)  # Convert to a set for fast lookup
+    start = min(edges, key=lambda p: (p[1], p[0]))  # Find the top-leftmost edge
+    ordered_boundary = []
+    stack = [start]
+    visited = set()
+
+    # Define movement directions (clockwise order: right, down, left, up)
+    moves = [(1, 0), (0, -1), (-1, 0), (0, 1)]
+
+    while stack:
+        current = stack.pop()
+        if current in visited:
+            continue
+        visited.add(current)
+        ordered_boundary.append(current)
+
+        # Check all possible next boundary edges in order
+        x, y = current
+        for dx, dy in moves:
+            neighbor = (x + dx, y + dy)
+            if neighbor in edges and neighbor not in visited:
+                stack.append(neighbor)
+                break  # Ensures the traversal follows a consistent direction
+
+    return ordered_boundary
