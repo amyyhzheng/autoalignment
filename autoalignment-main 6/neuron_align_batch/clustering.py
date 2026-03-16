@@ -213,15 +213,19 @@ def choose_best_clustering(distance_data, final_marker_distance):
 #         for row in grid:
 #             wr.writerow(row)
 #     return cluster_list
-def export_grouping_csv(grouping, out_path):
-    #temporary solution
+import csv
+import numpy as np
+
+def export_grouping_csv(grouping, out_path, start_id=0):
+    # temporary solution
     centroids, cmap, _ = grouping
 
     # order clusters by centroid position, BUT only keep ids that exist in cmap
     raw_order = np.argsort(centroids)
-    order = [cid for cid in raw_order if cid in cmap]   # <-- key fix
+    order = [cid for cid in raw_order if cid in cmap]
 
-    columns = [f"Group{i+1}" for i in range(len(order))]
+    # shift group numbering by start_id
+    columns = [f"Group{start_id + i + 1}" for i in range(len(order))]
 
     tp_max = 1 + max([t[2] for tuples in cmap.values() for t in tuples] or [0])
     grid = [["NA" for _ in order] for _ in range(tp_max)]
@@ -231,13 +235,16 @@ def export_grouping_csv(grouping, out_path):
         tuples = cmap[cid]
         col_entries = []
         have_tp = set()
+
         for _, pos, tp, point_idx in tuples:
             grid[tp][col] = pos
             col_entries.append((tp, point_idx, pos))
             have_tp.add(tp)
+
         for tp in range(tp_max):
             if tp not in have_tp:
                 col_entries.append((tp, "NA", "NA"))
+
         col_entries.sort()
         cluster_list.append(col_entries)
 
