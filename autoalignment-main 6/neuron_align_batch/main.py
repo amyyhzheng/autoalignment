@@ -55,6 +55,8 @@ def collect_marker_csvs_by_image(branch_dir: Path) -> dict[int, Path]:
     #         continue
     #     if idx not in by_img or len(p.name) < len(by_img[idx].name):
     #         by_img[idx] = p
+
+    #Changed to only bouton overlap csv
     for p in branch_dir.glob("*bouton*.csv"):
         idx = extract_image_index(p)
         if idx is None:
@@ -171,13 +173,36 @@ def run_one_branch(parent_dir: Path, branch_dir: Path, output_root: Path) -> Non
 
     shaft_clusters = spine_clusters = None
 
+    # if any(shaft_d):
+    #     shaft_grouping = choose_best_clustering(shaft_d, res.final_marker_distance)
+    #     if shaft_grouping:
+    #         shaft_clusters = export_grouping_csv(
+    #             shaft_grouping,
+    #             str(run_out / "inhibitory_shaft_grouping.csv"),
+    #         )
+
+    # if any(spine_d):
+    #     spine_grouping = choose_best_clustering(spine_d, res.final_marker_distance)
+    #     if spine_grouping:
+    #         spine_clusters = export_grouping_csv(
+    #             spine_grouping,
+    #             str(run_out / "inhibitory_spine_grouping.csv"),
+    #         )
+
+    shaft_clusters = []
+    spine_clusters = []
+
+    next_cluster_id = 0
+
     if any(shaft_d):
         shaft_grouping = choose_best_clustering(shaft_d, res.final_marker_distance)
         if shaft_grouping:
             shaft_clusters = export_grouping_csv(
                 shaft_grouping,
                 str(run_out / "inhibitory_shaft_grouping.csv"),
+                start_id=next_cluster_id,
             )
+            next_cluster_id += len(shaft_clusters)
 
     if any(spine_d):
         spine_grouping = choose_best_clustering(spine_d, res.final_marker_distance)
@@ -185,8 +210,8 @@ def run_one_branch(parent_dir: Path, branch_dir: Path, output_root: Path) -> Non
             spine_clusters = export_grouping_csv(
                 spine_grouping,
                 str(run_out / "inhibitory_spine_grouping.csv"),
+                start_id=next_cluster_id,
             )
-
     # ---------------------------
     # plots -> save to disk
     # ---------------------------
