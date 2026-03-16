@@ -26,37 +26,89 @@ from computation import ComputationResult
 #         spine.append(spine_tp)
 #     return shaft, spine
 
+# def separate_shaft_spine(settings: Settings, result: ComputationResult, eps: float = 1e-6):
+#     """
+#     TEMPORARY SOLUTION
+#     Return per-timepoint lists of shaft distances and spine distances.
+#     If duplicate distances occur within a TP (common due to rounding/snapping),
+#     de-duplicate them (keep first occurrence) instead of raising.
+#     """
+#     def dedupe_distances(dist_list, eps=1e-6):
+#         # preserve original order, treat distances within eps as duplicates
+#         kept = []
+#         for d in dist_list:
+#             if not any(abs(d - k) <= eps for k in kept):
+#                 kept.append(d)
+#         return kept
+
+#     shaft, spine = [], []
+#     for tp_idx, (types, dists) in enumerate(zip(result.raw_marker_types_only, result.final_marker_distance)):
+#         zp = list(zip(types, dists))
+
+#         shaft_tp = [d for t, d in zp if str(t).lower() == settings.inhibitory_shaft.lower()]
+#         spine_tp = [d for t, d in zp if str(t).lower() == settings.inhibitory_spine.lower()]
+
+#         print(f"Timepoint {tp_idx}: shaft distances: {shaft_tp}, spine distances: {spine_tp}")
+#         print(
+#             f"Timepoint {tp_idx}: shaft types: {[t for t, _ in zp if str(t).lower() == settings.inhibitory_shaft.lower()]}, "
+#             f"spine types: {[t for t, _ in zp if str(t).lower() == settings.inhibitory_spine.lower()]}"
+#         )
+
+#         # de-dupe instead of raise
+#         shaft_tp_dedup = dedupe_distances(shaft_tp, eps=eps)
+#         spine_tp_dedup = dedupe_distances(spine_tp, eps=eps)
+
+#         if len(shaft_tp_dedup) != len(shaft_tp):
+#             print(f"[separate_shaft_spine] WARNING tp={tp_idx}: deduped shaft distances {len(shaft_tp)} -> {len(shaft_tp_dedup)} (eps={eps})")
+#         if len(spine_tp_dedup) != len(spine_tp):
+#             print(f"[separate_shaft_spine] WARNING tp={tp_idx}: deduped spine distances {len(spine_tp)} -> {len(spine_tp_dedup)} (eps={eps})")
+
+#         shaft.append(shaft_tp_dedup)
+#         spine.append(spine_tp_dedup)
+
+#     return shaft, spine
+
 def separate_shaft_spine(settings: Settings, result: ComputationResult, eps: float = 1e-6):
     """
-    TEMPORARY SOLUTION
-    Return per-timepoint lists of shaft distances and spine distances.
-    If duplicate distances occur within a TP (common due to rounding/snapping),
-    de-duplicate them (keep first occurrence) instead of raising.
+    Return per-timepoint lists of shaft markers and spine markers.
+    Each marker keeps its original type and distance.
+    If duplicate distances occur within a TP, de-duplicate by distance
+    while preserving the first matching marker entry.
     """
-    def dedupe_distances(dist_list, eps=1e-6):
-        # preserve original order, treat distances within eps as duplicates
+    def dedupe_markers(marker_list, eps=1e-6):
         kept = []
-        for d in dist_list:
-            if not any(abs(d - k) <= eps for k in kept):
-                kept.append(d)
+        kept_distances = []
+        for m in marker_list:
+            d = m["distance"]
+            if not any(abs(d - kd) <= eps for kd in kept_distances):
+                kept.append(m)
+                kept_distances.append(d)
         return kept
 
     shaft, spine = [], []
+
     for tp_idx, (types, dists) in enumerate(zip(result.raw_marker_types_only, result.final_marker_distance)):
         zp = list(zip(types, dists))
 
-        shaft_tp = [d for t, d in zp if str(t).lower() == settings.inhibitory_shaft.lower()]
-        spine_tp = [d for t, d in zp if str(t).lower() == settings.inhibitory_spine.lower()]
+        shaft_tp = [
+            {"type": t, "distance": d, "tp": tp_idx}
+            for t, d in zp
+            if str(t).lower() == settings.inhibitory_shaft.lower()
+        ]
+        spine_tp = [
+            {"type": t, "distance": d, "tp": tp_idx}
+            for t, d in zp
+            if str(t).lower() == settings.inhibitory_spine.lower()
+        ]
 
-        print(f"Timepoint {tp_idx}: shaft distances: {shaft_tp}, spine distances: {spine_tp}")
+        print(f"Timepoint {tp_idx}: shaft distances: {[m['distance'] for m in shaft_tp]}, spine distances: {[m['distance'] for m in spine_tp]}")
         print(
-            f"Timepoint {tp_idx}: shaft types: {[t for t, _ in zp if str(t).lower() == settings.inhibitory_shaft.lower()]}, "
-            f"spine types: {[t for t, _ in zp if str(t).lower() == settings.inhibitory_spine.lower()]}"
+            f"Timepoint {tp_idx}: shaft types: {[m['type'] for m in shaft_tp]}, "
+            f"spine types: {[m['type'] for m in spine_tp]}"
         )
 
-        # de-dupe instead of raise
-        shaft_tp_dedup = dedupe_distances(shaft_tp, eps=eps)
-        spine_tp_dedup = dedupe_distances(spine_tp, eps=eps)
+        shaft_tp_dedup = dedupe_markers(shaft_tp, eps=eps)
+        spine_tp_dedup = dedupe_markers(spine_tp, eps=eps)
 
         if len(shaft_tp_dedup) != len(shaft_tp):
             print(f"[separate_shaft_spine] WARNING tp={tp_idx}: deduped shaft distances {len(shaft_tp)} -> {len(shaft_tp_dedup)} (eps={eps})")
@@ -213,31 +265,59 @@ def choose_best_clustering(distance_data, final_marker_distance):
 #         for row in grid:
 #             wr.writerow(row)
 #     return cluster_list
-def export_grouping_csv(grouping, out_path):
-    #temporary solution
+
+def export_grouping_csv(grouping, out_path, start_id=0, group_type=None, metadata_out=None):
+    # temporary solution
     centroids, cmap, _ = grouping
 
     # order clusters by centroid position, BUT only keep ids that exist in cmap
     raw_order = np.argsort(centroids)
-    order = [cid for cid in raw_order if cid in cmap]   # <-- key fix
+    order = [cid for cid in raw_order if cid in cmap]
 
-    columns = [f"Group{i+1}" for i in range(len(order))]
+    # shift group numbering by start_id
+    columns = [f"Group{start_id + i + 1}" for i in range(len(order))]
 
     tp_max = 1 + max([t[2] for tuples in cmap.values() for t in tuples] or [0])
     grid = [["NA" for _ in order] for _ in range(tp_max)]
     cluster_list = []
+    metadata_rows = []
 
     for col, cid in enumerate(order):
         tuples = cmap[cid]
         col_entries = []
         have_tp = set()
+        group_name = f"Group{start_id + col + 1}"
+        cluster_id = start_id + col + 1
+
         for _, pos, tp, point_idx in tuples:
             grid[tp][col] = pos
+
+            # keep OLD format for downstream plotting/mapping compatibility
             col_entries.append((tp, point_idx, pos))
             have_tp.add(tp)
+
+            # optional metadata export
+            metadata_rows.append({
+                "group_name": group_name,
+                "cluster_id": cluster_id,
+                "type": group_type,
+                "tp": tp,
+                "point_idx": point_idx,
+                "pos": pos,
+            })
+
         for tp in range(tp_max):
             if tp not in have_tp:
                 col_entries.append((tp, "NA", "NA"))
+                metadata_rows.append({
+                    "group_name": group_name,
+                    "cluster_id": cluster_id,
+                    "type": group_type,
+                    "tp": tp,
+                    "point_idx": "NA",
+                    "pos": "NA",
+                })
+
         col_entries.sort()
         cluster_list.append(col_entries)
 
@@ -246,5 +326,14 @@ def export_grouping_csv(grouping, out_path):
         wr.writerow(columns)
         for row in grid:
             wr.writerow(row)
+
+    if metadata_out is not None:
+        with open(metadata_out, "w", newline="") as f:
+            wr = csv.DictWriter(
+                f,
+                fieldnames=["group_name", "cluster_id", "type", "tp", "point_idx", "pos"]
+            )
+            wr.writeheader()
+            wr.writerows(metadata_rows)
 
     return cluster_list
