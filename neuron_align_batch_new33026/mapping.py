@@ -124,7 +124,7 @@ def export_all(settings: Settings, result: ComputationResult,
     for row in rows:
         tp = row[0].replace("Image", "")
 
-        z = row[5]
+        z = row[5]-1
         y = row[4]
         x = row[3]
         marker_id = row[1]
