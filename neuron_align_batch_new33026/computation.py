@@ -432,7 +432,7 @@ def _branch_points_from_csvs(settings: Settings) -> List[List[Coord]]:
         )
         print(f'read branch CSV for Timepoint {i+1}: {(df)} points')
         x, y, z = df["x"].values, df["y"].values, df["z"].values
-        raw.append(fit_branch_spline(x, y, z, n_points=1000))
+        raw.append(fit_branch_spline(x, y, z, n_points=10000))
     return raw
 
 
