@@ -5,7 +5,6 @@ import csv
 import numpy as np
 import matplotlib
 
-# Save-only backend (no GUI windows)
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
@@ -116,7 +115,7 @@ def build_aligned_inputs(parent_dir: Path, branch_dir: Path):
             f"Traces have: {sorted(trace_by_img.keys())}"
         )
 
-    print(f"[build_aligned_inputs] Using Image indices: {common_imgs}")
+    # print(f"[build_aligned_inputs] Using Image indices: {common_imgs}")
 
     # marker list ordered by image index
     marker_csvs = [marker_by_img[i] for i in common_imgs]
@@ -126,17 +125,16 @@ def build_aligned_inputs(parent_dir: Path, branch_dir: Path):
     for tp_idx, img_idx in enumerate(common_imgs):
         tp_name = f"Timepoint {tp_idx+1}"
         branch_csvs[tp_name] = trace_by_img[img_idx]
-        print(f"[build_branch_csvs] {tp_name}: {trace_by_img[img_idx].name}")
+        # print(f"[build_branch_csvs] {tp_name}: {trace_by_img[img_idx].name}")
 
     return marker_csvs, branch_csvs
 
+import sys
+import traceback
 
 def run_one_branch(parent_dir: Path, branch_dir: Path, output_root: Path) -> None:
     # branch_dir looks like: parent/PunctaScoring/branch3
     branch_id = branch_dir.name.replace("branch", "").strip()
-
-    marker_csvs, branch_csvs = build_aligned_inputs(parent_dir, branch_dir)
-    n_timepoints = len(marker_csvs)
 
     # per-run output structure
     run_name = f"{parent_dir.name}_branch{branch_id}"
@@ -145,173 +143,190 @@ def run_one_branch(parent_dir: Path, branch_dir: Path, output_root: Path) -> Non
     run_out.mkdir(parents=True, exist_ok=True)
     plots_out.mkdir(parents=True, exist_ok=True)
 
-    settings = Settings(
-        animal_id="SOM022",
-        branch_id=str(branch_id),
-        n_timepoints=n_timepoints,
-        branch_csvs=branch_csvs,
-        marker_csvs=marker_csvs,
-        fiducials_csv=Path(""),
-        export_dir=str(run_out),
-        scaling_factor=[1, 1, 1],
-        num_channels=4,
-        inhibitory_shaft="Shaft_SyntdNotScored",
-        inhibitory_spine="Spine_SyntdNotScored",
-        ojj_tif_key="Image",
-        snt_branch_fmt="branch%s",
-    )
+    # ---- log file path ----
+    log_path = run_out / f"{branch_dir.name}_log.txt"
 
-    # ---------------------------
-    # computation
-    # ---------------------------
-    res = compute(settings)
+    # ---- redirect prints to log ----
+    original_stdout = sys.stdout
+    with open(log_path, "w") as log_file:
+        sys.stdout = log_file
 
-    # ---------------------------
-    # clustering
-    shaft_markers, spine_markers = separate_shaft_spine(settings, res)
+        try:
+            print(f"===== Running {branch_dir.name} =====")
 
-    shaft_d = [[m["distance"] for m in tp] for tp in shaft_markers]
-    spine_d = [[m["distance"] for m in tp] for tp in spine_markers]
+            marker_csvs, branch_csvs = build_aligned_inputs(parent_dir, branch_dir)
+            n_timepoints = len(marker_csvs)
 
-    shaft_clusters = []
-    spine_clusters = []
-
-    next_cluster_id = 0
-
-    if any(shaft_d):
-        shaft_grouping = choose_best_clustering(shaft_d, res.final_marker_distance)
-        if shaft_grouping:
-            shaft_clusters = export_grouping_csv(
-                shaft_grouping,
-                str(run_out / "inhibitory_shaft_grouping.csv"),
-                start_id=next_cluster_id,
-                group_type=settings.inhibitory_shaft,
-                metadata_out=str(run_out / "inhibitory_shaft_grouping_metadata.csv"),
-            )
-            next_cluster_id += len(shaft_clusters)
-
-    if any(spine_d):
-        spine_grouping = choose_best_clustering(spine_d, res.final_marker_distance)
-        if spine_grouping:
-            spine_clusters = export_grouping_csv(
-                spine_grouping,
-                str(run_out / "inhibitory_spine_grouping.csv"),
-                start_id=next_cluster_id,
-                group_type=settings.inhibitory_spine,
-                metadata_out=str(run_out / "inhibitory_spine_grouping_metadata.csv"),
-            )
-    # ---------------------------
-    # plots -> save to disk
-    # ---------------------------
-    def export_markers_for_branch_plot(res, cluster_list, out_csv):
-        '''
-            probably move this function to viz_helpers just export so can plot later
-
-        '''
-        import pandas as pd
-
-        n_tp = len(res.final_marker_distance)
-
-        # --- build mapping exactly like the plot ---
-        marker_to_cluster = [dict() for _ in range(n_tp)]
-        if cluster_list:
-            for cid, cluster in enumerate(cluster_list, start=1):
-                for (tp, idx, _pos) in cluster:
-                    if idx == "NA":
-                        continue
-                    marker_to_cluster[tp][idx] = cid
-
-        # --- export rows ---
-        rows = []
-
-        for tp in range(n_tp):
-            xs = res.final_marker_distance[tp]
-
-            for m_idx, x in enumerate(xs):
-                rows.append({
-                    "timepoint": tp,
-                    "marker_index": m_idx,
-                    "distance_scaled": x,
-                    "cluster_id": marker_to_cluster[tp].get(m_idx, None),
-                })
-
-        df = pd.DataFrame(rows)
-        df.to_csv(out_csv, index=False)
-        return df
-    def export_landmarks_for_branch_plot(res, out_csv):
-        import pandas as pd
-
-        rows = []
-
-        if getattr(res, "cumdist_scaled", None):
-            if res.cumdist_scaled and len(res.cumdist_scaled[0]) >= 2:
-                boundaries = res.cumdist_scaled[0]
-                internal_bounds = boundaries[1:-1]  # skip 0 and total length
-
-                for i, x in enumerate(internal_bounds, start=1):
-                    rows.append({
-                        "landmark_id": i,
-                        "distance_scaled": x,
-                    })
-
-        df = pd.DataFrame(rows)
-        df.to_csv(out_csv, index=False)
-        return df
-        
-    if DO_PLOTS:
-        if shaft_clusters:
-            export_markers_for_branch_plot(
-                res,
-                shaft_clusters,
-                plots_out / "shaft_markers_along_branch.csv"
-            )
-            export_landmarks_for_branch_plot(
-                res,
-                plots_out / "shaft_landmarks.csv"
+            settings = Settings(
+                animal_id="SOM022",
+                branch_id=str(branch_id),
+                n_timepoints=n_timepoints,
+                branch_csvs=branch_csvs,
+                marker_csvs=marker_csvs,
+                fiducials_csv=Path(""),
+                export_dir=str(run_out),
+                scaling_factor=[1, 1, 1],
+                num_channels=4,
+                inhibitory_shaft="Shaft_SyntdNotScored",
+                inhibitory_spine="Spine_SynTdNotScored",
+                ojj_tif_key="Image",
+                snt_branch_fmt="branch%s",
             )
 
-            plot_markers_along_branch_with_ids(
-                res, shaft_clusters, title="Markers along branch (scaled) — shaft clusters"
-            )
+            res = compute(settings)
 
-        if spine_clusters:
-            export_markers_for_branch_plot(
-                res,
-                spine_clusters,
-                plots_out / "spine_markers_along_branch.csv"
-            )
-            export_landmarks_for_branch_plot(
-                res,
-                plots_out / "spine_landmarks.csv"
-            )
+            shaft_markers, spine_markers = separate_shaft_spine(settings, res)
 
-            plot_markers_along_branch_with_ids(
-                res, spine_clusters, title="Markers along branch (scaled) — spine clusters"
-            )
-        for tp_to_show in range(settings.n_timepoints):
-            if shaft_clusters:
-                plot_branch_with_cluster_ids(
-                    res, shaft_clusters, tp=tp_to_show, text_fontsize=8, text_dxy=(0.2, 0.2)
-                )
-                save_current_fig(plots_out / f"branch_with_shaft_cluster_ids_tp{tp_to_show+1}.png")
+            shaft_d = [[m["distance"] for m in tp] for tp in shaft_markers]
+            spine_d = [[m["distance"] for m in tp] for tp in spine_markers]
 
-            if spine_clusters:
-                plot_branch_with_cluster_ids(
-                    res, spine_clusters, tp=tp_to_show, text_fontsize=8, text_dxy=(0.2, 0.2)
-                )
-                save_current_fig(plots_out / f"branch_with_spine_cluster_ids_tp{tp_to_show+1}.png")
+            shaft_clusters = []
+            spine_clusters = []
 
-    # ---------------------------
-    # mapping + exports
-    # ---------------------------
-    out_csv = export_all(settings, res, shaft_clusters, spine_clusters, settings.export_dir)
-    print(f"[{branch_dir.name}] Finished pipeline → {out_csv}")
-    print(f"[{branch_dir.name}] Outputs in → {run_out}")
+            next_cluster_id = 0
 
+            if any(shaft_d):
+                shaft_grouping = choose_best_clustering(shaft_d, res.final_marker_distance)
+                if shaft_grouping:
+                    shaft_clusters = export_grouping_csv(
+                        shaft_grouping,
+                        str(run_out / "inhibitory_shaft_grouping.csv"),
+                        start_id=next_cluster_id,
+                        group_type=settings.inhibitory_shaft,
+                        metadata_out=str(run_out / "inhibitory_shaft_grouping_metadata.csv"),
+                    )
+                    next_cluster_id += len(shaft_clusters)
+
+            if any(spine_d):
+                spine_grouping = choose_best_clustering(spine_d, res.final_marker_distance)
+                if spine_grouping:
+                    spine_clusters = export_grouping_csv(
+                        spine_grouping,
+                        str(run_out / "inhibitory_spine_grouping.csv"),
+                        start_id=next_cluster_id,
+                        group_type=settings.inhibitory_spine,
+                        metadata_out=str(run_out / "inhibitory_spine_grouping_metadata.csv"),
+                    )
+
+            # ---------------------------
+            # plots -> save to disk
+            # ---------------------------
+            def export_markers_for_branch_plot(res, cluster_list, out_csv):
+                import pandas as pd
+
+                n_tp = len(res.final_marker_distance)
+
+                marker_to_cluster = [dict() for _ in range(n_tp)]
+                if cluster_list:
+                    for cid, cluster in enumerate(cluster_list, start=1):
+                        for (tp, idx, _pos) in cluster:
+                            if idx == "NA":
+                                continue
+                            marker_to_cluster[tp][idx] = cid
+
+                rows = []
+
+                for tp in range(n_tp):
+                    xs = res.final_marker_distance[tp]
+
+                    for m_idx, x in enumerate(xs):
+                        rows.append({
+                            "timepoint": tp,
+                            "marker_index": m_idx,
+                            "distance_scaled": x,
+                            "cluster_id": marker_to_cluster[tp].get(m_idx, None),
+                        })
+
+                df = pd.DataFrame(rows)
+                df.to_csv(out_csv, index=False)
+                return df
+
+            def export_landmarks_for_branch_plot(res, out_csv):
+                import pandas as pd
+
+                rows = []
+
+                if getattr(res, "cumdist_scaled", None):
+                    if res.cumdist_scaled and len(res.cumdist_scaled[0]) >= 2:
+                        boundaries = res.cumdist_scaled[0]
+                        internal_bounds = boundaries[1:-1]
+
+                        for i, x in enumerate(internal_bounds, start=1):
+                            rows.append({
+                                "landmark_id": i,
+                                "distance_scaled": x,
+                            })
+
+                df = pd.DataFrame(rows)
+                df.to_csv(out_csv, index=False)
+                return df
+
+            if DO_PLOTS:
+                if shaft_clusters:
+                    export_markers_for_branch_plot(
+                        res,
+                        shaft_clusters,
+                        plots_out / "shaft_markers_along_branch.csv"
+                    )
+                    export_landmarks_for_branch_plot(
+                        res,
+                        plots_out / "shaft_landmarks.csv"
+                    )
+
+                    plot_markers_along_branch_with_ids(
+                        res, shaft_clusters, title="Markers along branch (scaled) — shaft clusters"
+                    )
+
+                if spine_clusters:
+                    export_markers_for_branch_plot(
+                        res,
+                        spine_clusters,
+                        plots_out / "spine_markers_along_branch.csv"
+                    )
+                    export_landmarks_for_branch_plot(
+                        res,
+                        plots_out / "spine_landmarks.csv"
+                    )
+
+                    plot_markers_along_branch_with_ids(
+                        res, spine_clusters, title="Markers along branch (scaled) — spine clusters"
+                    )
+
+                for tp_to_show in range(settings.n_timepoints):
+                    if shaft_clusters:
+                        plot_branch_with_cluster_ids(
+                            res, shaft_clusters, tp=tp_to_show, text_fontsize=8, text_dxy=(0.2, 0.2)
+                        )
+                        save_current_fig(plots_out / f"branch_with_shaft_cluster_ids_tp{tp_to_show+1}.png")
+
+                    if spine_clusters:
+                        plot_branch_with_cluster_ids(
+                            res, spine_clusters, tp=tp_to_show, text_fontsize=8, text_dxy=(0.2, 0.2)
+                        )
+                        save_current_fig(plots_out / f"branch_with_spine_cluster_ids_tp{tp_to_show+1}.png")
+
+            # ---------------------------
+            # mapping + exports
+            # ---------------------------
+            out_csv = export_all(settings, res, shaft_clusters, spine_clusters, settings.export_dir)
+
+            print(f"[{branch_dir.name}] Finished pipeline → {out_csv}")
+            print(f"[{branch_dir.name}] Outputs in → {run_out}")
+
+        except Exception:
+            print("ERROR occurred:")
+            traceback.print_exc()
+            raise
+
+        finally:
+            sys.stdout = original_stdout  # restore console
+
+    # small console message
+    print(f"[{branch_dir.name}] done → log saved to {log_path}")
 
 def main():
     parent_dir = Path(
-        "/Volumes/nedividata/Joe/2p_data/SOM/ThirdRound/SOM026_DOB081520_RV/Analysis/Analysis_withAmyCode"
+        '/Volumes/nedividata/Joe/2p_data/SOM/ThirdRound/SOM022_DOB073020LT/Analysis/Analysis_withAmyCode'
     ).expanduser().resolve()
 
     puncta_root = parent_dir / "PunctaScoring"
