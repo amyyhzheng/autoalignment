@@ -7,6 +7,9 @@ from config import Settings
 from computation import ComputationResult
 from io_utils import z_imagej_to_objectj
 from geometry import distance_along_branch
+from collections import defaultdict
+import os
+import csv
 
 Coord = Tuple[float, float, float]
 
@@ -66,89 +69,199 @@ def clusters_to_csv_rows(cluster_list, marker_type: str, empty_type: str, start_
     return out, next_id
 
 
+# def export_all(settings: Settings, result: ComputationResult,
+#                shaft_clusters, spine_clusters,
+#                export_dir):
+#     # auto_dir = os.path.join(export_dir, 'autoAlignment')
+#     # os.makedirs(auto_dir, exist_ok=True)
+#     auto_dir = export_dir
+#     rows = []
+#     next_id = 1
+#     if shaft_clusters:
+#         part, next_id = clusters_to_csv_rows(shaft_clusters, "Shaft_SyntdNotScored", "Empty_shaft", next_id, False, settings, result)
+#         rows.extend(part)
+#     if spine_clusters:
+#         part, next_id = clusters_to_csv_rows(spine_clusters, "Spine_SynTdNotScored", "Empty_spine", next_id, True, settings, result)
+#         rows.extend(part)
+
+#     # Landmarks
+#     for tp, coords in enumerate(result.raw_fiducials):
+#         for k, (x, y, z_img) in enumerate(coords, start=1):
+#             rows.append([f"Image{tp+1}", f"Marker{next_id}", "Landmark", x, y, z_imagej_to_objectj(z_img, settings.num_channels)])
+#             next_id += 1
+
+#     out_csv = os.path.join(auto_dir, f"{settings.animal_id}_b{settings.branch_id}_alignmentMapping.csv")
+#     with open(out_csv, 'w', newline='') as f:
+#         wr = csv.writer(f)
+#         wr.writerow(["image","markerID","markerType","marker_X","marker_Y","marker_Z"])
+#         wr.writerows(rows)
+
+#     # Per-timepoint napari-friendly CSVs
+#     # by_tp = {}
+#     # for row in rows:
+#     #     tp = row[0].replace("Image", "")
+#     #     nap = [row[5], row[4], row[3], row[1], row[2]]  # z,y,x,label,type
+#     #     by_tp.setdefault(tp, []).append(nap)
+
+        
+#     # # header = ["axis-0","axis-1","axis-2","label","type"]#changed to be axis 0, 1, 2 for napari
+#     # # for tp, nap_rows in by_tp.items():
+#     # #     path = os.path.join(auto_dir, f"{settings.animal_id}_b{settings.branch_id}_timepoint{tp}_napari.csv")
+#     # #     with open(path, 'w', newline='') as f:
+#     # #         wr = csv.writer(f); wr.writerow(header); wr.writerows(nap_rows)
+
+#     # header = ["index", "axis-0", "axis-1", "axis-2", "label", "type", "Notes"]
+
+#     # for tp, nap_rows in by_tp.items():
+#     #     path = os.path.join(
+#     #         auto_dir,
+#     #         f"{settings.animal_id}_b{settings.branch_id}_timepoint{tp}_napari.csv"
+#     #     )
+#     #     with open(path, 'w', newline='') as f:
+#     #         wr = csv.writer(f)
+#     #         wr.writerow(header)
+#     #         for i, row in enumerate(nap_rows, start=1):
+#     #             wr.writerow(row + [i, ""])
+#     # return out_csv
+#     by_tp = {}
+#     for row in rows:
+#         tp = row[0].replace("Image", "")
+
+#         z = row[5]-1
+#         y = row[4]
+#         x = row[3]
+#         marker_id = row[1]
+#         marker_type = row[2]
+
+#         # For landmarks, override type + label for napari
+#         if marker_type == "Landmark":
+#             # strip "Marker" prefix -> just the number
+#             label = str(marker_id).replace("Marker", "")
+#             mtype = "Ambiguous"
+#         else:
+#             label = marker_id
+#             mtype = marker_type
+
+#         # z, y, x, label, type
+#         nap = [z, y, x, label, mtype]
+#         by_tp.setdefault(tp, []).append(nap)
+
+#     # axis-0/1/2, label, type + index, Notes
+#     header = ["axis-0", "axis-1", "axis-2", "label", "type", "index", "Notes"]
+
+#     for tp, nap_rows in by_tp.items():
+#         #changed to match puncta scoring format
+#         tp_int = int(tp) 
+
+#         path = os.path.join(
+#             auto_dir,
+#             f"Image{tp_int - 1}_branch{settings.branch_id}.csv",
+#         )
+#         with open(path, 'w', newline='') as f:
+#             wr = csv.writer(f)
+#             wr.writerow(header)
+#             for i, row in enumerate(nap_rows, start=1):
+#                 # row = [axis-0, axis-1, axis-2, label, type]
+#                 wr.writerow(row + [i, ""])
+
+#     return out_csv
+
 def export_all(settings: Settings, result: ComputationResult,
                shaft_clusters, spine_clusters,
                export_dir):
-    # auto_dir = os.path.join(export_dir, 'autoAlignment')
-    # os.makedirs(auto_dir, exist_ok=True)
+
     auto_dir = export_dir
     rows = []
     next_id = 1
+
     if shaft_clusters:
-        part, next_id = clusters_to_csv_rows(shaft_clusters, "Shaft_SyntdNotScored", "Empty_shaft", next_id, False, settings, result)
+        part, next_id = clusters_to_csv_rows(
+            shaft_clusters, "Shaft_SyntdNotScored", "Empty_shaft",
+            next_id, False, settings, result
+        )
         rows.extend(part)
+
     if spine_clusters:
-        part, next_id = clusters_to_csv_rows(spine_clusters, "Spine_SynTdNotScored", "Empty_spine", next_id, True, settings, result)
+        part, next_id = clusters_to_csv_rows(
+            spine_clusters, "Spine_SynTdNotScored", "Empty_spine",
+            next_id, True, settings, result
+        )
         rows.extend(part)
 
     # Landmarks
     for tp, coords in enumerate(result.raw_fiducials):
         for k, (x, y, z_img) in enumerate(coords, start=1):
-            rows.append([f"Image{tp+1}", f"Marker{next_id}", "Landmark", x, y, z_imagej_to_objectj(z_img, settings.num_channels)])
+            rows.append([
+                f"Image{tp+1}",
+                f"Marker{next_id}",
+                "Landmark",
+                x,
+                y,
+                z_imagej_to_objectj(z_img, settings.num_channels)
+            ])
             next_id += 1
 
-    out_csv = os.path.join(auto_dir, f"{settings.animal_id}_b{settings.branch_id}_alignmentMapping.csv")
+    out_csv = os.path.join(
+        auto_dir,
+        f"{settings.animal_id}_b{settings.branch_id}_alignmentMapping.csv"
+    )
+
     with open(out_csv, 'w', newline='') as f:
         wr = csv.writer(f)
         wr.writerow(["image","markerID","markerType","marker_X","marker_Y","marker_Z"])
         wr.writerows(rows)
 
-    # Per-timepoint napari-friendly CSVs
-    # by_tp = {}
-    # for row in rows:
-    #     tp = row[0].replace("Image", "")
-    #     nap = [row[5], row[4], row[3], row[1], row[2]]  # z,y,x,label,type
-    #     by_tp.setdefault(tp, []).append(nap)
-
-        
-    # # header = ["axis-0","axis-1","axis-2","label","type"]#changed to be axis 0, 1, 2 for napari
-    # # for tp, nap_rows in by_tp.items():
-    # #     path = os.path.join(auto_dir, f"{settings.animal_id}_b{settings.branch_id}_timepoint{tp}_napari.csv")
-    # #     with open(path, 'w', newline='') as f:
-    # #         wr = csv.writer(f); wr.writerow(header); wr.writerows(nap_rows)
-
-    # header = ["index", "axis-0", "axis-1", "axis-2", "label", "type", "Notes"]
-
-    # for tp, nap_rows in by_tp.items():
-    #     path = os.path.join(
-    #         auto_dir,
-    #         f"{settings.animal_id}_b{settings.branch_id}_timepoint{tp}_napari.csv"
-    #     )
-    #     with open(path, 'w', newline='') as f:
-    #         wr = csv.writer(f)
-    #         wr.writerow(header)
-    #         for i, row in enumerate(nap_rows, start=1):
-    #             wr.writerow(row + [i, ""])
-    # return out_csv
     by_tp = {}
     for row in rows:
         tp = row[0].replace("Image", "")
 
-        z = row[5]-1
+        z = row[5] - 1
         y = row[4]
         x = row[3]
         marker_id = row[1]
         marker_type = row[2]
 
-        # For landmarks, override type + label for napari
         if marker_type == "Landmark":
-            # strip "Marker" prefix -> just the number
             label = str(marker_id).replace("Marker", "")
             mtype = "Ambiguous"
         else:
             label = marker_id
             mtype = marker_type
 
-        # z, y, x, label, type
+        # keep full info for duplicate checking
         nap = [z, y, x, label, mtype]
         by_tp.setdefault(tp, []).append(nap)
 
-    # axis-0/1/2, label, type + index, Notes
+    # -------- DUPLICATE CHECK --------
+    print("\nChecking duplicates within each timepoint...")
+
+    found_any = False
+    for tp, nap_rows in by_tp.items():
+        coord_map = defaultdict(list)
+
+        for row in nap_rows:
+            z, y, x, label, mtype = row
+            coord_key = (z, y, x)
+            coord_map[coord_key].append({
+                "id": label,
+                "type": mtype
+            })
+
+        for coord, items in coord_map.items():
+            if len(items) > 1:
+                found_any = True
+                print(f"\nTimepoint {tp}: duplicate coordinate {coord}")
+                for item in items:
+                    print(f"   id={item['id']}, type={item['type']}")
+
+    if not found_any:
+        print("No duplicates found.")
+    # -------- END DUPLICATE CHECK --------
+
     header = ["axis-0", "axis-1", "axis-2", "label", "type", "index", "Notes"]
 
     for tp, nap_rows in by_tp.items():
-        #changed to match puncta scoring format
-        tp_int = int(tp) 
+        tp_int = int(tp)
 
         path = os.path.join(
             auto_dir,
@@ -158,7 +271,6 @@ def export_all(settings: Settings, result: ComputationResult,
             wr = csv.writer(f)
             wr.writerow(header)
             for i, row in enumerate(nap_rows, start=1):
-                # row = [axis-0, axis-1, axis-2, label, type]
                 wr.writerow(row + [i, ""])
 
     return out_csv
