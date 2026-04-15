@@ -75,19 +75,24 @@ def separate_shaft_spine(settings: Settings, result: ComputationResult, eps: flo
     If duplicate distances occur within a TP, de-duplicate by distance
     while preserving the first matching marker entry.
     """
-    def dedupe_markers(marker_list, eps=1e-6, delta=1e-3):
-        used = []
+    def dedupe_markers(marker_list, used=None, eps=1e-6, delta=1e-3):
+        if used is None:
+            used = []
+
         for m in marker_list:
             d = m["distance"]
             
             # Keep shifting until it's unique
             while any(abs(d - u) <= eps for u in used):
+                print('had to dedupe marker with distance', d, 'by shifting it by delta', delta)
                 d += delta
             
             m["distance"] = d
             used.append(d)
         
-        return marker_list
+        return marker_list, used
+    
+
     shaft, spine = [], []
 
     for tp_idx, (types, dists) in enumerate(zip(result.raw_marker_types_only, result.final_marker_distance)):
@@ -110,8 +115,10 @@ def separate_shaft_spine(settings: Settings, result: ComputationResult, eps: flo
             f"spine types: {[m['type'] for m in spine_tp]}"
         )
 
-        shaft_tp_dedup = dedupe_markers(shaft_tp, eps=eps)
-        spine_tp_dedup = dedupe_markers(spine_tp, eps=eps)
+        used = []
+        delta = 1e-3
+        shaft_tp_dedup, used = dedupe_markers(shaft_tp, used=used, eps=eps, delta=delta)
+        spine_tp_dedup, used = dedupe_markers(spine_tp, used=used, eps=eps, delta=delta)
 
         if len(shaft_tp_dedup) != len(shaft_tp):
             print(f"[separate_shaft_spine] WARNING tp={tp_idx}: deduped shaft distances {len(shaft_tp)} -> {len(shaft_tp_dedup)} (eps={eps})")
@@ -124,52 +131,21 @@ def separate_shaft_spine(settings: Settings, result: ComputationResult, eps: flo
     return shaft, spine
 
 
-# def _closest_centroid_idx(x, centroids):
-#     return int(np.argmin([abs(c - x) for c in centroids]))
-def _closest_valid_centroid_idx(pos, tp, current, cmap):
-    # sort centroids by distance to this point
-    ranked = sorted(
-        range(len(current)),
-        key=lambda ci: abs(current[ci] - pos)
-    )
+def _closest_centroid_idx(x, centroids):
+    return int(np.argmin([abs(c - x) for c in centroids]))
 
-    for ci in ranked:
-        tuples = cmap.get(ci, [])
-        used_tps = {t for _, _, t, _ in tuples}
-        if tp not in used_tps:
-            return ci
-
-    return None
 
 def _kmeans_once(centroids, distance_data, final_marker_distance):
-    # def assign(current):
-    #     cmap = {}
-    #     for tp, tp_list in enumerate(distance_data):
-    #         for pos in tp_list:
-    #             ci = _closest_centroid_idx(pos, current)
-    #             if ci not in cmap: cmap[ci] = []
-    #             # store: (centroid_idx, position, tp, point_idx)
-    #             point_idx = final_marker_distance[tp].index(pos)
-    #             cmap[ci].append((ci, pos, tp, point_idx))
-    #     return cmap
     def assign(current):
         cmap = {}
         for tp, tp_list in enumerate(distance_data):
-            for point_idx, pos in enumerate(tp_list):
-                ci = _closest_valid_centroid_idx(pos, tp, current, cmap)
-
-                if ci is None:
-                    # no existing cluster can take this tp
-                    ci = len(current)
-                    current.append(pos)
-                    cmap[ci] = []
-
-                if ci not in cmap:
-                    cmap[ci] = []
-
+            for pos in tp_list:
+                ci = _closest_centroid_idx(pos, current)
+                if ci not in cmap: cmap[ci] = []
+                # store: (centroid_idx, position, tp, point_idx)
+                point_idx = final_marker_distance[tp].index(pos)
                 cmap[ci].append((ci, pos, tp, point_idx))
-
-        return cmap, current
+        return cmap
 
     def reassign(cmap):
         newc = []
