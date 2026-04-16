@@ -198,7 +198,7 @@ def export_all(settings: Settings, result: ComputationResult,
 
     if spine_clusters:
         part, next_id = clusters_to_csv_rows(
-            spine_clusters, "Spine_SynTdNotScored", "Empty_spine",
+            spine_clusters, "Spine_SyntdNotScored", "Empty_spine",
             next_id, True, settings, result
         )
         rows.extend(part)
