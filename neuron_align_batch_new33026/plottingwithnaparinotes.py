@@ -14,6 +14,7 @@ def plot_markers_along_branch_from_napari_notes(
     show_unclustered=True,
     show_landmarks=True,
     label_real_only=False,
+    make_separate_shaft_spine_plots=True,
 ):
 
     print("\n========== DEBUG START ==========\n")
@@ -42,21 +43,11 @@ def plot_markers_along_branch_from_napari_notes(
     print("\n--- Matching branch/timepoint pattern ---\n")
 
     for p in all_csvs:
-        # skip hidden / AppleDouble files
         if p.name.startswith(".") or p.name.startswith("._"):
             print("Skipping hidden file:", p.name)
             continue
 
         name_lower = p.name.lower()
-
-        # keep only bouton files if that is still what you want
-        if "bouton" not in name_lower:
-            print("Skipping non-bouton file:", p.name)
-            continue
-
-        if "snapped_bouton_overlap" not in name_lower:
-            print("Skipping non-snapped bouton file:", p.name)
-            continue
 
         m = pat.match(p.name)
         print("Checking file:", p.name)
@@ -85,17 +76,12 @@ def plot_markers_along_branch_from_napari_notes(
         tmp = df.copy()
         tmp = tmp[tmp["label"].notna()].copy()
 
-        # remove ambiguous landmarks if you do not want them as clustered markers
-        if not show_unclustered:
-            tmp = tmp[tmp["label"].notna()].copy()
-
         added = 0
         for _, row in tmp.iterrows():
             label = row["label"]
             marker_type = row["type"]
             pos = row["Notes"]
 
-            # skip empty Notes
             if pd.isna(pos) or str(pos).strip() == "":
                 continue
 
@@ -104,8 +90,6 @@ def plot_markers_along_branch_from_napari_notes(
             except Exception:
                 continue
 
-            # try to coerce label to numeric cluster id if possible
-            cluster_id = None
             try:
                 cluster_id = int(float(label))
             except Exception:
@@ -135,6 +119,17 @@ def plot_markers_along_branch_from_napari_notes(
     print(markers.head(20))
     print("\nType counts:\n", markers["type"].value_counts(dropna=False))
 
+    def classify_synapse_kind(t):
+        if pd.isna(t):
+            return None
+        t = str(t).lower()
+        if "shaft" in t:
+            return "shaft"
+        if "spine" in t:
+            return "spine"
+        return None
+
+    markers["synapse_kind"] = markers["type"].apply(classify_synapse_kind)
 
     type_to_color = {
         "Shaft_Geph+Bsn_NoSynTd": "tab:blue",
@@ -149,76 +144,88 @@ def plot_markers_along_branch_from_napari_notes(
         None: "black",
     }
 
-    timepoints = sorted(markers["timepoint"].dropna().astype(int).unique())
+    def draw_plot(plot_df, plot_title):
+        if plot_df.empty:
+            print(f"No rows to plot for: {plot_title}")
+            return
 
-    plt.figure(figsize=(8.0, 5.0))
+        timepoints = sorted(plot_df["timepoint"].dropna().astype(int).unique())
 
-    unique_types = list(markers["type"].drop_duplicates())
-    for t in unique_types:
-        if pd.isna(t):
-            sub = markers[markers["type"].isna()].copy()
-            label = "unmapped"
-            color = type_to_color.get(None, "black")
-        else:
-            sub = markers[markers["type"] == t].copy()
-            label = str(t)
-            color = type_to_color.get(t, "black")
+        plt.figure(figsize=(8.0, 5.0))
 
-        if sub.empty:
-            continue
+        unique_types = list(plot_df["type"].drop_duplicates())
+        for t in unique_types:
+            if pd.isna(t):
+                sub = plot_df[plot_df["type"].isna()].copy()
+                label = "unmapped"
+                color = type_to_color.get(None, "black")
+            else:
+                sub = plot_df[plot_df["type"] == t].copy()
+                label = str(t)
+                color = type_to_color.get(t, "black")
 
-        xs = sub["distance_scaled"].tolist()
-        ys = sub["timepoint"].astype(int).tolist()
-
-        plt.scatter(xs, ys, s=16, color=color, label=label)
-
-        for _, row in sub.iterrows():
-            cid = row["cluster_id"]
-            if pd.isna(cid):
+            if sub.empty:
                 continue
 
-            if label_real_only and isinstance(row["type"], str) and "empty" in row["type"].lower():
-                continue
+            xs = sub["distance_scaled"].tolist()
+            ys = sub["timepoint"].astype(int).tolist()
 
-            cid_str = str(cid)
-            plt.text(
-                row["distance_scaled"],
-                int(row["timepoint"]) + text_dy,
-                cid_str,
-                fontsize=text_fontsize,
-                ha="center",
-                va="bottom",
-                color=color,
-            )
+            plt.scatter(xs, ys, s=16, color=color, label=label)
 
-    # --------------------------------------------------
-    # landmark lines
-    # --------------------------------------------------
-    if show_landmarks and landmarks_csv_path is not None:
-        landmarks = pd.read_csv(landmarks_csv_path)
-        if not landmarks.empty:
-            if "distance_scaled" not in landmarks.columns:
-                raise ValueError("Landmark CSV must contain 'distance_scaled' column.")
+            for _, row in sub.iterrows():
+                cid = row["cluster_id"]
+                if pd.isna(cid):
+                    continue
 
-            first = True
-            for x in landmarks["distance_scaled"].tolist():
-                plt.axvline(
-                    x,
-                    linestyle="--",
-                    linewidth=1.0,
-                    alpha=0.6,
-                    color="gray",
-                    label="landmarks" if first else None,
+                if label_real_only and isinstance(row["type"], str) and "empty" in row["type"].lower():
+                    continue
+
+                cid_str = str(cid)
+                plt.text(
+                    row["distance_scaled"],
+                    int(row["timepoint"]) + text_dy,
+                    cid_str,
+                    fontsize=text_fontsize,
+                    ha="center",
+                    va="bottom",
+                    color=color,
                 )
-                first = False
 
-    plt.yticks(timepoints, [f"TP{tp+1}" for tp in timepoints])
-    plt.xlabel("Scaled cumulative distance (µm)")
-    plt.title(title)
-    plt.legend(ncol=2, fontsize=8)
-    plt.tight_layout()
-    plt.show()
+        if show_landmarks and landmarks_csv_path is not None:
+            landmarks = pd.read_csv(landmarks_csv_path)
+            if not landmarks.empty:
+                if "distance_scaled" not in landmarks.columns:
+                    raise ValueError("Landmark CSV must contain 'distance_scaled' column.")
 
+                first = True
+                for x in landmarks["distance_scaled"].tolist():
+                    plt.axvline(
+                        x,
+                        linestyle="--",
+                        linewidth=1.0,
+                        alpha=0.6,
+                        color="gray",
+                        label="landmarks" if first else None,
+                    )
+                    first = False
+
+        plt.yticks(timepoints, [f"TP{tp+1}" for tp in timepoints])
+        plt.xlabel("Scaled cumulative distance (µm)")
+        plt.title(plot_title)
+        plt.legend(ncol=2, fontsize=8)
+        plt.tight_layout()
+        plt.show()
+
+    # combined
+    draw_plot(markers, title)
+
+    # separate shaft/spine
+    if make_separate_shaft_spine_plots:
+        shaft_markers = markers[markers["synapse_kind"] == "shaft"].copy()
+        spine_markers = markers[markers["synapse_kind"] == "spine"].copy()
+
+        draw_plot(shaft_markers, f"{title} — shaft only")
+        draw_plot(spine_markers, f"{title} — spine only")
 
 plot_markers_along_branch_from_napari_notes(
     napari_dir='/Volumes/nedividata/Joe/2p_data/SOM/ThirdRound/SOM022_DOB073020LT/Analysis/Analysis_withAmyCode/AlignmentTesting/Test_2026_0416_maxspread7_1000points_newplotting',
