@@ -49,24 +49,6 @@ def _avg_translation(cluster, result: ComputationResult) -> Tuple[float, float]:
     return (round(xs/n, 0), round(ys/n, 0)) if n else (0.0, 0.0)
 
 
-def clusters_to_csv_rows(cluster_list, marker_type: str, empty_type: str, start_id: int, translate: bool,
-                         settings: Settings, result: ComputationResult):
-    out = []
-    next_id = start_id
-    for cluster in cluster_list:
-        avg_dist = _average_cluster_distance(cluster)
-        dx, dy = _avg_translation(cluster, result) if translate else (0.0, 0.0)
-        for tp, idx, _pos in cluster:
-            if idx == 'NA':
-                mtype = empty_type
-                x, y, z = _estimate_coordinate(tp, avg_dist, result)
-                x += dx; y += dy
-            else:
-                mtype = marker_type
-                x, y, z = result.raw_marker_coords_only[tp][idx]
-            out.append([f"Image{tp+1}", next_id, mtype, x, y, z_imagej_to_objectj(z, settings.num_channels)])
-        next_id += 1
-    return out, next_id
 
 
 # def export_all(settings: Settings, result: ComputationResult,
@@ -165,6 +147,39 @@ def clusters_to_csv_rows(cluster_list, marker_type: str, empty_type: str, start_
 #                 wr.writerow(row + [i, ""])
 
 #     return out_csv
+def clusters_to_csv_rows(cluster_list, marker_type: str, empty_type: str, start_id: int, translate: bool,
+                         settings: Settings, result: ComputationResult):
+    out = []
+    next_id = start_id
+
+    for cluster in cluster_list:
+        avg_dist = _average_cluster_distance(cluster)
+        dx, dy = _avg_translation(cluster, result) if translate else (0.0, 0.0)
+
+        for tp, idx, pos in cluster:
+            if idx == 'NA':
+                mtype = empty_type
+                x, y, z = _estimate_coordinate(tp, avg_dist, result)
+                x += dx
+                y += dy
+            else:
+                mtype = marker_type
+                x, y, z = result.raw_marker_coords_only[tp][idx]
+
+            out.append([
+                f"Image{tp+1}",
+                next_id,
+                mtype,
+                x,
+                y,
+                z_imagej_to_objectj(z, settings.num_channels),
+                pos
+            ])
+
+        next_id += 1
+
+    return out, next_id
+
 
 def export_all(settings: Settings, result: ComputationResult,
                shaft_clusters, spine_clusters,
@@ -197,7 +212,8 @@ def export_all(settings: Settings, result: ComputationResult,
                 "Landmark",
                 x,
                 y,
-                z_imagej_to_objectj(z_img, settings.num_channels)
+                z_imagej_to_objectj(z_img, settings.num_channels),
+                ""
             ])
             next_id += 1
 
@@ -208,7 +224,7 @@ def export_all(settings: Settings, result: ComputationResult,
 
     with open(out_csv, 'w', newline='') as f:
         wr = csv.writer(f)
-        wr.writerow(["image","markerID","markerType","marker_X","marker_Y","marker_Z"])
+        wr.writerow(["image", "markerID", "markerType", "marker_X", "marker_Y", "marker_Z", "pos"])
         wr.writerows(rows)
 
     by_tp = {}
@@ -220,16 +236,18 @@ def export_all(settings: Settings, result: ComputationResult,
         x = row[3]
         marker_id = row[1]
         marker_type = row[2]
+        pos = row[6]
 
         if marker_type == "Landmark":
             label = str(marker_id).replace("Marker", "")
             mtype = "Ambiguous"
+            pos = ""
         else:
             label = marker_id
             mtype = marker_type
 
-        # keep full info for duplicate checking
-        nap = [z, y, x, label, mtype]
+        # keep full info for duplicate checking + Notes export
+        nap = [z, y, x, label, mtype, pos]
         by_tp.setdefault(tp, []).append(nap)
 
     # -------- DUPLICATE CHECK --------
@@ -240,11 +258,12 @@ def export_all(settings: Settings, result: ComputationResult,
         coord_map = defaultdict(list)
 
         for row in nap_rows:
-            z, y, x, label, mtype = row
+            z, y, x, label, mtype, pos = row
             coord_key = (z, y, x)
             coord_map[coord_key].append({
                 "id": label,
-                "type": mtype
+                "type": mtype,
+                "pos": pos
             })
 
         for coord, items in coord_map.items():
@@ -252,7 +271,7 @@ def export_all(settings: Settings, result: ComputationResult,
                 found_any = True
                 print(f"\nTimepoint {tp}: duplicate coordinate {coord}")
                 for item in items:
-                    print(f"   id={item['id']}, type={item['type']}")
+                    print(f"   id={item['id']}, type={item['type']}, pos={item['pos']}")
 
     if not found_any:
         print("No duplicates found.")
@@ -271,6 +290,6 @@ def export_all(settings: Settings, result: ComputationResult,
             wr = csv.writer(f)
             wr.writerow(header)
             for i, row in enumerate(nap_rows, start=1):
-                wr.writerow(row + [i, ""])
+                wr.writerow(row[:5] + [i, row[5]])
 
     return out_csv
