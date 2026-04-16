@@ -221,7 +221,7 @@ def plot_markers_along_branch_from_napari_notes(
 
 
 plot_markers_along_branch_from_napari_notes(
-    napari_dir='/Volumes/nedividata/Joe/2p_data/SOM/ThirdRound/SOM022_DOB073020LT/Analysis/Analysis_withAmyCode/AutoalignmentOutputs2/Analysis_withAmyCode_branch1',
+    napari_dir='/Volumes/nedividata/Joe/2p_data/SOM/ThirdRound/SOM022_DOB073020LT/Analysis/Analysis_withAmyCode/AlignmentTesting/Test_2026_0416_maxspread7_1000points_newplotting',
     landmarks_csv_path="/Volumes/nedividata/Joe/2p_data/SOM/ThirdRound/SOM026_DOB081520_RV/Analysis/Analysis_withAmyCode/AutoalignmentOutputs/Analysis_withAmyCode_branch2/plots/shaft_landmarks.csv",
     branch_number=2,
     title="Markers along branch from napari Notes — spine clusters",
