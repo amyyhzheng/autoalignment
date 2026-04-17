@@ -307,8 +307,8 @@ def run_one_branch(parent_dir: Path, branch_dir: Path, output_root: Path) -> Non
             # mapping + exports
             out_csv = export_all(settings, res, shaft_clusters, spine_clusters, settings.export_dir)
 
-            print(f"[{branch_dir.name}] Finished pipeline → {out_csv}")
-            print(f"[{branch_dir.name}] Outputs in → {run_out}")
+            print(f"[{branch_dir.name}] Finished pipeline {out_csv}")
+            print(f"[{branch_dir.name}] Outputs in {run_out}")
 
         except Exception:
             print("ERROR occurred:")
@@ -319,7 +319,7 @@ def run_one_branch(parent_dir: Path, branch_dir: Path, output_root: Path) -> Non
             sys.stdout = original_stdout  # restore console
 
     # small console message
-    print(f"[{branch_dir.name}] done → log saved to {log_path}")
+    print(f"[{branch_dir.name}] done log saved to {log_path}")
 
 def main():
     parent_dir = Path(
