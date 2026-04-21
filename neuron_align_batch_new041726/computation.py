@@ -522,6 +522,36 @@ def _branch_points_from_csvs(settings: Settings) -> List[List[Coord]]:
 
 
 def compute(settings: Settings) -> ComputationResult:
+    def get_branch_endpoints(markers_tp):
+        start = None
+        end = None
+
+        for label, coord in markers_tp:
+            if label == "StartBranch":
+                start = coord
+                print(f"Found StartBranch marker at {coord}")
+            elif label == "EndBranch":
+                end = coord
+                print(f"Found EndBranch marker at {coord}")
+
+        return start, end
+    def subset_branch(branch, start_coord, end_coord):
+        start_idx, end_idx = nearest_indices([start_coord, end_coord], branch)
+
+        # ensure correct order
+        i0, i1 = sorted([start_idx, end_idx])
+
+        return branch[i0:i1+1]
+    # --------------------------------------------------------
+    # 3. Map markers to nearest branch vertex (for arclength param)
+    # --------------------------------------------------------
+    def nearest_indices(points, branch):
+        idxs = []
+        for p in points:
+            dists = [euc_xy(p, q) for q in branch]
+            idxs.append(int(np.argmin(dists)))
+        return idxs
+    
     # --------------------------------------------------------
     # 1. Load raw data
     # --------------------------------------------------------
@@ -530,7 +560,26 @@ def compute(settings: Settings) -> ComputationResult:
     raw_markers, raw_fids_typed = read_markers_csv_list(
         settings.marker_csvs, settings.num_channels
     )
+    subset_branches = []
 
+    for tp in range(len(raw_branch)):
+        branch = raw_branch[tp]
+        markers_tp = raw_markers[tp]
+
+        start_coord, end_coord = get_branch_endpoints(markers_tp)
+
+        if start_coord is None or end_coord is None:
+            # do nothing → keep full branch
+            subset_branches.append(branch)
+            print(f"[subset] TP{tp+1}: no start/end markers → using full branch ({len(branch)} pts)")
+            continue
+
+        sub_branch = subset_branch(branch, start_coord, end_coord)
+        subset_branches.append(sub_branch)
+
+        print(f"[subset] TP{tp+1}: {len(branch)} {len(sub_branch)} points")
+
+    raw_branch = subset_branches
     # No manual fiducials file anymore
 
     # Strip types for markers into parallel arrays
@@ -553,15 +602,7 @@ def compute(settings: Settings) -> ComputationResult:
         nm.append(m)
         nf.append(f)  # currently [], will be replaced with landmark coords
 
-    # --------------------------------------------------------
-    # 3. Map markers to nearest branch vertex (for arclength param)
-    # --------------------------------------------------------
-    def nearest_indices(points, branch):
-        idxs = []
-        for p in points:
-            dists = [euc_xy(p, q) for q in branch]
-            idxs.append(int(np.argmin(dists)))
-        return idxs
+
 
     cb_markers: List[List[int]] = []
     for i in range(settings.n_timepoints):
