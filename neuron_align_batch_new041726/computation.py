@@ -310,7 +310,8 @@ def compute_tangent_angles(branch_xy: np.ndarray,
                            coord_smooth_window: int = 7,
                            theta_smooth_window: int = 11):
     """
-    See your original definition: tangent angle signal θ(t) along branch.
+    tangent angle signal θ(t) along branch.
+    finish the same resampling + smoothing as curvature_scores_along_branch 
     """
     pts, t_grid = resample_branch_equal_arclen(branch_xy, n_samp=n_samp)
     N = pts.shape[0]
@@ -324,7 +325,7 @@ def compute_tangent_angles(branch_xy: np.ndarray,
     else:
         pts_s = pts
 
-    # Finite differences for tangents
+    # Finite differences for tangent estimation 
     diffs = np.zeros_like(pts_s)
     if N >= 2:
         diffs[0] = pts_s[1] - pts_s[0]
@@ -384,44 +385,110 @@ def curvature_scores_along_branch(branch_xy: np.ndarray,
 
     return kappa_smooth, t_grid
 
-def dtw_path(seq1: np.ndarray, seq2: np.ndarray):
+
+def dtw_path(
+    seq1: np.ndarray,
+    seq2: np.ndarray,
+    max_warp_frac: float = 0.08,   # how far off-diagonal matching can go
+    step_penalty: float = 0.5,     # discourages horizontal/vertical runs
+):
     """
-    Classic DTW for 1D sequences.
-    Returns a list of (i, j) indices giving the alignment path.
+    Windowed, slope-biased DTW for 1D sequences.
+
+    seq1: reference signal
+    seq2: source signal
+
+    max_warp_frac:
+        Max allowed |i-j| as a fraction of max(n, m).
+        Smaller = less stretch/squish.
+    step_penalty:
+        Extra cost for non-diagonal moves.
+        Larger = more diagonal / more uniform warping.
     """
     seq1 = np.asarray(seq1, dtype=float)
     seq2 = np.asarray(seq2, dtype=float)
     n, m = len(seq1), len(seq2)
 
+    window = max(1, int(max(n, m) * max_warp_frac))
+
     D = np.full((n + 1, m + 1), np.inf)
     D[0, 0] = 0.0
-    trace = np.zeros((n + 1, m + 1), dtype=np.int8)  # 0 = diag, 1 = up, 2 = left
+    trace = np.full((n + 1, m + 1), -1, dtype=np.int8)  # 0 diag, 1 up, 2 left
 
     for i in range(1, n + 1):
-        for j in range(1, m + 1):
+        j_lo = max(1, i - window)
+        j_hi = min(m, i + window)
+        for j in range(j_lo, j_hi + 1):
             cost = (seq1[i - 1] - seq2[j - 1]) ** 2
-            choices = (D[i - 1, j - 1], D[i - 1, j], D[i, j - 1])
+
+            diag = D[i - 1, j - 1]
+            up   = D[i - 1, j] + step_penalty
+            left = D[i, j - 1] + step_penalty
+
+            choices = (diag, up, left)
             k = int(np.argmin(choices))
             D[i, j] = cost + choices[k]
             trace[i, j] = k
 
-    # Backtrack
+    if not np.isfinite(D[n, m]):
+        raise RuntimeError(
+            "DTW failed under current constraints; try a slightly larger max_warp_frac."
+        )
+
     i, j = n, m
     path = []
     while i > 0 and j > 0:
         path.append((i - 1, j - 1))
         move = trace[i, j]
-        if move == 0:   # diag
+        if move == 0:
             i -= 1
             j -= 1
-        elif move == 1: # up
+        elif move == 1:
             i -= 1
-        else:           # left
+        elif move == 2:
             j -= 1
+        else:
+            raise RuntimeError("Broken DTW traceback.")
 
     path.reverse()
     return path
+# def dtw_path(seq1: np.ndarray, seq2: np.ndarray):
+#     """
+#     Classic DTW for 1D sequences.
+#     Returns a list of (i, j) indices giving the alignment path.
+#     """
+#     seq1 = np.asarray(seq1, dtype=float)
+#     seq2 = np.asarray(seq2, dtype=float)
+#     n, m = len(seq1), len(seq2)
 
+#     D = np.full((n + 1, m + 1), np.inf)
+#     D[0, 0] = 0.0
+#     trace = np.zeros((n + 1, m + 1), dtype=np.int8)  # 0 = diag, 1 = up, 2 = left
+
+#     for i in range(1, n + 1):
+#         for j in range(1, m + 1):
+#             cost = (seq1[i - 1] - seq2[j - 1]) ** 2
+#             choices = (D[i - 1, j - 1], D[i - 1, j], D[i, j - 1])
+#             k = int(np.argmin(choices))
+#             D[i, j] = cost + choices[k]
+#             trace[i, j] = k
+
+#     # Backtrack
+#     i, j = n, m
+#     path = []
+#     while i > 0 and j > 0:
+#         path.append((i - 1, j - 1))
+#         move = trace[i, j]
+#         if move == 0:   # diag
+#             i -= 1
+#             j -= 1
+#         elif move == 1: # up
+#             i -= 1
+#         else:           # left
+#             j -= 1
+
+#     path.reverse()
+#     return path
 def build_warp_from_dtw(t_ref: np.ndarray,
                         t_src: np.ndarray,
                         path: List[tuple]):
@@ -520,7 +587,6 @@ def _branch_points_from_csvs(settings: Settings) -> List[List[Coord]]:
         raw.append(fit_branch_spline(x, y, z, n_points=1000))
     return raw
 
-
 def compute(settings: Settings) -> ComputationResult:
     def get_branch_endpoints(markers_tp):
         start = None
@@ -535,23 +601,19 @@ def compute(settings: Settings) -> ComputationResult:
                 print(f"Found EndBranch marker at {coord}")
 
         return start, end
-    def subset_branch(branch, start_coord, end_coord):
-        start_idx, end_idx = nearest_indices([start_coord, end_coord], branch)
 
-        # ensure correct order
-        i0, i1 = sorted([start_idx, end_idx])
-
-        return branch[i0:i1+1]
-    # --------------------------------------------------------
-    # 3. Map markers to nearest branch vertex (for arclength param)
-    # --------------------------------------------------------
     def nearest_indices(points, branch):
         idxs = []
         for p in points:
             dists = [euc_xy(p, q) for q in branch]
             idxs.append(int(np.argmin(dists)))
         return idxs
-    
+
+    def subset_branch(branch, start_coord, end_coord):
+        start_idx, end_idx = nearest_indices([start_coord, end_coord], branch)
+        i0, i1 = sorted([start_idx, end_idx])
+        return branch[i0:i1 + 1]
+
     # --------------------------------------------------------
     # 1. Load raw data
     # --------------------------------------------------------
@@ -560,8 +622,11 @@ def compute(settings: Settings) -> ComputationResult:
     raw_markers, raw_fids_typed = read_markers_csv_list(
         settings.marker_csvs, settings.num_channels
     )
-    subset_branches = []
 
+    # --------------------------------------------------------
+    # 2. Crop branch using StartBranch / EndBranch markers if present
+    # --------------------------------------------------------
+    subset_branches = []
     for tp in range(len(raw_branch)):
         branch = raw_branch[tp]
         markers_tp = raw_markers[tp]
@@ -569,30 +634,30 @@ def compute(settings: Settings) -> ComputationResult:
         start_coord, end_coord = get_branch_endpoints(markers_tp)
 
         if start_coord is None or end_coord is None:
-            # do nothing → keep full branch
             subset_branches.append(branch)
-            print(f"[subset] TP{tp+1}: no start/end markers → using full branch ({len(branch)} pts)")
+            print(
+                f"[subset] TP{tp+1}: no start/end markers → using full branch ({len(branch)} pts)"
+            )
             continue
 
         sub_branch = subset_branch(branch, start_coord, end_coord)
         subset_branches.append(sub_branch)
-
-        print(f"[subset] TP{tp+1}: {len(branch)} {len(sub_branch)} points")
+        print(f"[subset] TP{tp+1}: {len(branch)} -> {len(sub_branch)} points")
 
     raw_branch = subset_branches
-    # No manual fiducials file anymore
 
-    # Strip types for markers into parallel arrays
+    # --------------------------------------------------------
+    # 3. Strip marker types into parallel arrays
+    # --------------------------------------------------------
     raw_marker_coords_only = [[m[1] for m in tp] for tp in raw_markers]
     raw_marker_types_only = [[m[0] for m in tp] for tp in raw_markers]
 
     # --------------------------------------------------------
-    # 2. Normalize & scale (branch + markers only)
+    # 4. Normalize & scale branch + markers
     # --------------------------------------------------------
-    nb, nm, nf = [], [], []
+    nb, nm = [], []
     for i in range(settings.n_timepoints):
-        # Pass empty fiducials list; we'll fill nf later from landmarks
-        b, m, f = _normalize_and_scale(
+        b, m, _ = _normalize_and_scale(
             raw_branch[i],
             raw_marker_coords_only[i],
             [],
@@ -600,161 +665,194 @@ def compute(settings: Settings) -> ComputationResult:
         )
         nb.append(b)
         nm.append(m)
-        nf.append(f)  # currently [], will be replaced with landmark coords
 
+    # normalize manual fiducials too, in case we use them
+    nf_manual = []
+    for i in range(settings.n_timepoints):
+        fid_coords_i = [coord for _label, coord in raw_fids_typed[i]]
+        _, _, f_norm = _normalize_and_scale(
+            raw_branch[i],
+            [],
+            fid_coords_i,
+            settings.scaling_factor,
+        )
+        nf_manual.append(f_norm)
 
-
+    # --------------------------------------------------------
+    # 5. Map markers to nearest branch vertex
+    # --------------------------------------------------------
     cb_markers: List[List[int]] = []
     for i in range(settings.n_timepoints):
         cb_markers.append(nearest_indices(nm[i], nb[i]))
 
     # --------------------------------------------------------
-    # 4. DTW-based alignment of branches (tangent angle signals)
-    #    and curvature-based landmarks
+    # 6. Landmark strategy:
+    #    use manual landmarks if ALL timepoints have them;
+    #    otherwise fall back to auto landmarks
     # --------------------------------------------------------
-    n_samp_theta = 200
-
-    theta_all: List[np.ndarray] = []
-    tgrid_all: List[np.ndarray] = []
-    s_all: List[np.ndarray] = []
-    L_all: List[float] = []
-    t_norm_all: List[np.ndarray] = []
-
-    for i in range(settings.n_timepoints):
-        branch_xy = _to_xy(np.array(nb[i], dtype=float))
-        s_i, L_i, t_norm_i = compute_arclength(branch_xy)
-        s_all.append(s_i)
-        L_all.append(L_i)
-        t_norm_all.append(t_norm_i)
-
-        theta_i, t_grid_i = compute_tangent_angles(
-            branch_xy,
-            n_samp=n_samp_theta,
-            coord_smooth_window=7,
-            theta_smooth_window=11,
-        )
-        theta_all.append(theta_i)
-        tgrid_all.append(t_grid_i)
-
-    ref_tp = 0
-    theta_ref = theta_all[ref_tp]
-    t_ref_grid = tgrid_all[ref_tp]
-
-    warp_funcs: List = []
-    warp_src_samples: List[np.ndarray] = []
-    warp_ref_samples: List[np.ndarray] = []
-
-    for tp in range(settings.n_timepoints):
-        if tp == ref_tp:
-            # identity warp
-            warp_funcs.append(lambda t, _tg=t_ref_grid: float(t))
-            warp_src_samples.append(t_ref_grid.copy())
-            warp_ref_samples.append(t_ref_grid.copy())
-            continue
-
-        theta_src = theta_all[tp]
-        t_src_grid = tgrid_all[tp]
-
-        path = dtw_path(theta_ref, theta_src)
-        f_tp, t_src_arr, t_ref_arr = build_warp_from_dtw(
-            t_ref_grid, t_src_grid, path
-        )
-        warp_funcs.append(f_tp)
-        warp_src_samples.append(t_src_arr)
-        warp_ref_samples.append(t_ref_arr)
-
-    # --------------------------------------------------------
-    # 5. Curvature-based landmarks on reference branch
-    # --------------------------------------------------------
-    end_clip_frac = 0.08
-    min_peak_frac = 0.25
-    min_idx_sep_frac = 0.10
-    max_landmarks = 3
-    fallback_K = 2
-
-    branch_ref_xy = _to_xy(np.array(nb[ref_tp], dtype=float))
-    kappa_ref, t_ref_curv = curvature_scores_along_branch(
-        branch_ref_xy,
-        n_samp=200,
-        coord_smooth_window=11,
-        curv_smooth_window=11,
+    has_manual_landmarks_all_tps = all(
+        len(tp_fids) > 0 for tp_fids in raw_fids_typed
     )
 
-    kappa_for_peaks = kappa_ref.copy()
-    tip_mask = (t_ref_curv <= end_clip_frac) | (
-        t_ref_curv >= 1.0 - end_clip_frac
-    )
-    kappa_for_peaks[tip_mask] = 0.0
+    if has_manual_landmarks_all_tps:
+        print("[landmarks] Using manual landmarks from CSV for all timepoints.")
 
-    min_idx_sep = max(1, int(len(kappa_for_peaks) * min_idx_sep_frac))
-    peaks_all, _ = find_peaks(kappa_for_peaks, distance=min_idx_sep)
+        cb_fids: List[List[int]] = []
+        for tp in range(settings.n_timepoints):
+            fid_idxs = nearest_indices(nf_manual[tp], nb[tp])
+            fid_idxs = sorted(set(fid_idxs))
+            cb_fids.append(fid_idxs)
 
-    if len(peaks_all) == 0:
-        # Fallback: nearly straight branch
-        t_ref_landmarks = np.linspace(0.0, 1.0, fallback_K + 2)[1:-1]
-    else:
-        peak_vals = kappa_for_peaks[peaks_all]
-        max_val = float(peak_vals.max())
-        height_thresh = min_peak_frac * max_val
-
-        keep_mask = peak_vals >= height_thresh
-        peaks_kept = peaks_all[keep_mask]
-
-        if len(peaks_kept) == 0:
-            peaks_kept = peaks_all
-
-        if len(peaks_kept) > max_landmarks:
-            vals_kept = peak_vals[keep_mask] if keep_mask.any() else peak_vals
-            order = np.argsort(vals_kept)[::-1]
-            chosen_idx = order[:max_landmarks]
-            peaks_chosen = peaks_kept[chosen_idx]
-        else:
-            peaks_chosen = peaks_kept
-
-        peaks_chosen = np.sort(peaks_chosen)
-        t_ref_landmarks = t_ref_curv[peaks_chosen]
-
-    # --------------------------------------------------------
-    # 6. Map those landmarks to every timepoint via DTW warp inverse
-    #    -> landmark indices on each branch = "virtual fiducials"
-    # --------------------------------------------------------
-    landmarks_all: List[List[int]] = []
-
-    for tp in range(settings.n_timepoints):
-        branch_xy = _to_xy(np.array(nb[tp], dtype=float))
-        s_i, L_i, t_norm_i = compute_arclength(branch_xy)
-
-        if tp == ref_tp:
-            t_src_landmarks = t_ref_landmarks
-        else:
-            t_src_arr = warp_src_samples[tp]
-            t_ref_arr = warp_ref_samples[tp]
-            t_src_landmarks = np.interp(
-                t_ref_landmarks, t_ref_arr, t_src_arr
-            )
-
-        landmark_indices_tp = [
-            int(np.argmin(np.abs(t_norm_i - t_src_l)))
-            for t_src_l in t_src_landmarks
+        nf = [
+            [nb[tp][idx] for idx in cb_fids[tp]]
+            for tp in range(settings.n_timepoints)
         ]
-        landmark_indices_tp = sorted(set(landmark_indices_tp))
-        landmarks_all.append(landmark_indices_tp)
+        raw_fiducials = [
+            [raw_branch[tp][idx] for idx in cb_fids[tp]]
+            for tp in range(settings.n_timepoints)
+        ]
 
-    # Use these curvature/DTW landmarks as fiducial branch indices
-    cb_fids: List[List[int]] = landmarks_all
+    else:
+        print("[landmarks] Manual landmarks missing in at least one timepoint; using auto landmarks.")
 
-    # Also define normalized/raw "fiducial" coordinates for completeness
-    nf = [
-        [nb[tp][idx] for idx in cb_fids[tp]]
-        for tp in range(settings.n_timepoints)
-    ]
-    raw_fiducials = [
-        [raw_branch[tp][idx] for idx in cb_fids[tp]]
-        for tp in range(settings.n_timepoints)
-    ]
+        # --------------------------------------------------------
+        # 6A. DTW-based alignment of branches (tangent angle signals)
+        # --------------------------------------------------------
+        n_samp_theta = 200
+
+        theta_all: List[np.ndarray] = []
+        tgrid_all: List[np.ndarray] = []
+        s_all: List[np.ndarray] = []
+        L_all: List[float] = []
+        t_norm_all: List[np.ndarray] = []
+
+        for i in range(settings.n_timepoints):
+            branch_xy = _to_xy(np.array(nb[i], dtype=float))
+            s_i, L_i, t_norm_i = compute_arclength(branch_xy)
+            s_all.append(s_i)
+            L_all.append(L_i)
+            t_norm_all.append(t_norm_i)
+
+            theta_i, t_grid_i = compute_tangent_angles(
+                branch_xy,
+                n_samp=n_samp_theta,
+                coord_smooth_window=7,
+                theta_smooth_window=11,
+            )
+            theta_all.append(theta_i)
+            tgrid_all.append(t_grid_i)
+
+        ref_tp = 0
+        theta_ref = theta_all[ref_tp]
+        t_ref_grid = tgrid_all[ref_tp]
+
+        warp_src_samples: List[np.ndarray] = []
+        warp_ref_samples: List[np.ndarray] = []
+
+        for tp in range(settings.n_timepoints):
+            if tp == ref_tp:
+                warp_src_samples.append(t_ref_grid.copy())
+                warp_ref_samples.append(t_ref_grid.copy())
+                continue
+
+            theta_src = theta_all[tp]
+            t_src_grid = tgrid_all[tp]
+
+            path = dtw_path(theta_ref, theta_src)
+            _f_tp, t_src_arr, t_ref_arr = build_warp_from_dtw(
+                t_ref_grid, t_src_grid, path
+            )
+            warp_src_samples.append(t_src_arr)
+            warp_ref_samples.append(t_ref_arr)
+
+        # --------------------------------------------------------
+        # 6B. Curvature-based landmarks on reference branch
+        # --------------------------------------------------------
+        end_clip_frac = 0.08
+        min_peak_frac = 0.5
+        min_idx_sep_frac = 0.10
+        max_landmarks = 3
+        fallback_K = 2
+
+        branch_ref_xy = _to_xy(np.array(nb[ref_tp], dtype=float))
+        kappa_ref, t_ref_curv = curvature_scores_along_branch(
+            branch_ref_xy,
+            n_samp=200,
+            coord_smooth_window=11,
+            curv_smooth_window=11,
+        )
+
+        kappa_for_peaks = kappa_ref.copy()
+        tip_mask = (t_ref_curv <= end_clip_frac) | (
+            t_ref_curv >= 1.0 - end_clip_frac
+        )
+        kappa_for_peaks[tip_mask] = 0.0
+
+        min_idx_sep = max(1, int(len(kappa_for_peaks) * min_idx_sep_frac))
+        peaks_all, _ = find_peaks(kappa_for_peaks, distance=min_idx_sep)
+
+        if len(peaks_all) == 0:
+            t_ref_landmarks = np.linspace(0.0, 1.0, fallback_K + 2)[1:-1]
+        else:
+            peak_vals = kappa_for_peaks[peaks_all]
+            max_val = float(peak_vals.max())
+            height_thresh = min_peak_frac * max_val
+
+            keep_mask = peak_vals >= height_thresh
+            peaks_kept = peaks_all[keep_mask]
+
+            if len(peaks_kept) == 0:
+                peaks_kept = peaks_all
+
+            if len(peaks_kept) > max_landmarks:
+                vals_kept = peak_vals[keep_mask] if keep_mask.any() else peak_vals
+                order = np.argsort(vals_kept)[::-1]
+                chosen_idx = order[:max_landmarks]
+                peaks_chosen = peaks_kept[chosen_idx]
+            else:
+                peaks_chosen = peaks_kept
+
+            peaks_chosen = np.sort(peaks_chosen)
+            t_ref_landmarks = t_ref_curv[peaks_chosen]
+
+        # --------------------------------------------------------
+        # 6C. Map auto landmarks to every timepoint
+        # --------------------------------------------------------
+        landmarks_all: List[List[int]] = []
+
+        for tp in range(settings.n_timepoints):
+            branch_xy = _to_xy(np.array(nb[tp], dtype=float))
+            s_i, L_i, t_norm_i = compute_arclength(branch_xy)
+
+            if tp == ref_tp:
+                t_src_landmarks = t_ref_landmarks
+            else:
+                t_src_arr = warp_src_samples[tp]
+                t_ref_arr = warp_ref_samples[tp]
+                t_src_landmarks = np.interp(
+                    t_ref_landmarks, t_ref_arr, t_src_arr
+                )
+
+            landmark_indices_tp = [
+                int(np.argmin(np.abs(t_norm_i - t_src_l)))
+                for t_src_l in t_src_landmarks
+            ]
+            landmark_indices_tp = sorted(set(landmark_indices_tp))
+            landmarks_all.append(landmark_indices_tp)
+
+        cb_fids = landmarks_all
+
+        nf = [
+            [nb[tp][idx] for idx in cb_fids[tp]]
+            for tp in range(settings.n_timepoints)
+        ]
+        raw_fiducials = [
+            [raw_branch[tp][idx] for idx in cb_fids[tp]]
+            for tp in range(settings.n_timepoints)
+        ]
 
     # --------------------------------------------------------
-    # 7. Segments & lengths (unchanged logic, but using cb_fids)
+    # 7. Segments & lengths
     # --------------------------------------------------------
     segments_all: List[List[Tuple[int, int]]] = []
     seg_lengths_all: List[List[float]] = []
@@ -765,6 +863,7 @@ def compute(settings: Settings) -> ComputationResult:
             raise RuntimeError(
                 f"Duplicate fiducial-to-branch indices at timepoint {i+1}"
             )
+
         segs, lens = [], []
         for a, b in zip(idxs[:-1], idxs[1:]):
             if a == b:
@@ -773,6 +872,7 @@ def compute(settings: Settings) -> ComputationResult:
                 continue
             lens.append(distance_along_branch(nb[i], a, b))
             segs.append((a, b))
+
         segments_all.append(segs)
         seg_lengths_all.append(lens)
 
@@ -784,6 +884,7 @@ def compute(settings: Settings) -> ComputationResult:
         if seg_lengths_all
         else []
     )
+
     scale_factors_all: List[List[float]] = []
     for i in range(settings.n_timepoints):
         sfs = []
@@ -791,7 +892,6 @@ def compute(settings: Settings) -> ComputationResult:
             sfs.append(0.01 if seg_len == 0 else seg_max / seg_len)
         scale_factors_all.append(sfs)
 
-    # Scaled segment lengths + cumulative distances
     seg_lengths_scaled = [
         [
             l * sf
@@ -816,7 +916,7 @@ def compute(settings: Settings) -> ComputationResult:
     ]
 
     # --------------------------------------------------------
-    # 9. Final per-marker cumulative distances (same as before)
+    # 9. Final per-marker cumulative distances
     # --------------------------------------------------------
     final_marker_distance: List[List[float]] = []
     for tp in range(settings.n_timepoints):
