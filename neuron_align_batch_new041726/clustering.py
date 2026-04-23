@@ -210,8 +210,7 @@ def _kmeans_once(centroids, distance_data, final_marker_distance):
         return cmap, current
 
     def reassign(cmap):
-        print("CMAPAPPPAPAPAPPAPAPAPAPAPAPPAPA!!!!!!")
-        print(cmap)
+
         newc = []
         for i in range(len(cmap)):
             vals = [p for _, p, _, _ in cmap[i]]
@@ -221,8 +220,7 @@ def _kmeans_once(centroids, distance_data, final_marker_distance):
     current = centroids[:]
     for _ in range(10):
         cmap, current = assign(current)
-        print("CMAPAPPPAPAPAPPAPAPAPAPAPAPPAPA!!!!!!")
-        print(cmap)
+
         newc = reassign(cmap)
         if newc == current: break
         current = newc
