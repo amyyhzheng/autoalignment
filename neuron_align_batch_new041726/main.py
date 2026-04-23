@@ -44,25 +44,41 @@ def save_current_fig(outpath: Path) -> None:
 
 def collect_marker_csvs_by_image(branch_dir: Path) -> dict[int, Path]:
     """
-    Collect marker CSVs in branch_dir keyed by Image#.
-    If multiple CSVs map to the same Image#, keep the shortest filename (usually canonical).
+    Collect regular marker CSVs in branch_dir keyed by Image#.
+    Excludes landmark CSVs.
+    If multiple CSVs map to the same Image#, keep the shortest filename.
     """
     by_img: dict[int, Path] = {}
     for p in branch_dir.glob("*.csv"):
+        if "landmark" in p.name.lower():
+            continue
+
         idx = extract_image_index(p)
         if idx is None:
             continue
+
         if idx not in by_img or len(p.name) < len(by_img[idx].name):
             by_img[idx] = p
 
-    # Changed to only bouton overlap csv
-    # for p in branch_dir.glob("*bouton*.csv"):
-    #     idx = extract_image_index(p)
-    #     if idx is None:
-    #         continue
+    return by_img
 
-    #     if idx not in by_img or len(p.name) < len(by_img[idx].name):
-    #         by_img[idx] = p
+def collect_landmark_csvs_by_image(branch_dir: Path) -> dict[int, Path]:
+    """
+    Collect landmark CSVs in branch_dir keyed by Image#.
+    Expected naming contains 'Landmark' and Image#.
+    If multiple CSVs map to the same Image#, keep the shortest filename.
+    """
+    by_img: dict[int, Path] = {}
+    for p in branch_dir.glob("*.csv"):
+        if "landmark" not in p.name.lower():
+            continue
+
+        idx = extract_image_index(p)
+        if idx is None:
+            continue
+
+        if idx not in by_img or len(p.name) < len(by_img[idx].name):
+            by_img[idx] = p
 
     return by_img
 
@@ -93,18 +109,23 @@ def collect_trace_csv_by_image(snt_root: Path) -> dict[int, Path]:
 
     return by_img
 
-
 def build_aligned_inputs(parent_dir: Path, branch_dir: Path):
     """
     Build marker_csvs list + branch_csvs dict using the intersection of Image indices
     present in BOTH:
       - parent_dir/SNTTrace/Image{idx}/*_Trace_xyzCoordinates.csv
-      - branch_dir/*.csv (marker files)
-    This prevents crashes when a branch folder has extra marker CSVs (e.g., Image6)
-    but SNTTrace only has Image0..Image5.
+      - branch_dir regular marker CSVs
+
+    Also looks for a corresponding landmark CSV in the same branch folder
+    containing 'Landmark' in the filename and the same Image#.
+
+    marker_csvs becomes a list of dicts:
+      {"markers": <marker csv>, "landmarks": <landmark csv or None>}
     """
     snt_root = parent_dir / "SNTTrace"
+
     marker_by_img = collect_marker_csvs_by_image(branch_dir)
+    landmark_by_img = collect_landmark_csvs_by_image(branch_dir)
     trace_by_img = collect_trace_csv_by_image(snt_root)
 
     common_imgs = sorted(set(marker_by_img) & set(trace_by_img))
@@ -115,20 +136,19 @@ def build_aligned_inputs(parent_dir: Path, branch_dir: Path):
             f"Traces have: {sorted(trace_by_img.keys())}"
         )
 
-    # print(f"[build_aligned_inputs] Using Image indices: {common_imgs}")
+    marker_csvs = []
+    for img_idx in common_imgs:
+        marker_csvs.append({
+            "markers": marker_by_img[img_idx],
+            "landmarks": landmark_by_img.get(img_idx, None),
+        })
 
-    # marker list ordered by image index
-    marker_csvs = [marker_by_img[i] for i in common_imgs]
-
-    # branch_csvs: Timepoint 1..N mapped to the chosen trace csv for each image index
     branch_csvs: dict[str, Path] = {}
     for tp_idx, img_idx in enumerate(common_imgs):
         tp_name = f"Timepoint {tp_idx+1}"
         branch_csvs[tp_name] = trace_by_img[img_idx]
-        # print(f"[build_branch_csvs] {tp_name}: {trace_by_img[img_idx].name}")
 
     return marker_csvs, branch_csvs
-
 import sys
 import traceback
 
@@ -323,11 +343,11 @@ def run_one_branch(parent_dir: Path, branch_dir: Path, output_root: Path) -> Non
 
 def main():
     parent_dir = Path(
-       '/Volumes/nedividata/Joe/2p_data/SOM/ThirdRound/SOM022_DOB073020LT/Analysis/Analysis_withAmyCode'
+       '/Volumes/nedividata/Amy/files_for_amy_fromJoe/SOM055_cell5_2026_0421'
     ).expanduser().resolve()
 
     puncta_root = parent_dir / "PunctaScoring"
-    output_root = parent_dir / "AutoalignmentOutputs7"
+    output_root = parent_dir / "AutoalignmentOutputstestinglandmark_afterpenalty"
 
     branch_dirs = sorted([p for p in puncta_root.glob("branch*") if p.is_dir()])
     if not branch_dirs:
