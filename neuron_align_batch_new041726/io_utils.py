@@ -220,28 +220,31 @@ def _pick_first(df: pd.DataFrame, cols: List[str]) -> str:
 #         print(f"[markers] Timepoint {tp_idx+1}: {len(tp_markers)} markers, {len(tp_fids)} landmarks.")
 
 #     return raw_markers, raw_fiducials
-
-def read_markers_csv_list(
-    marker_files,  num_channels = 4   
-):
+def read_markers_csv_list(marker_files, num_channels=4):
     """
     Napari Points CSV reader (list-aware).
 
+    Supports each item in marker_files being either:
+      - a CSV path
+      - a dict with:
+            {"markers": <path>, "landmarks": <path or None>}
+
     Expected columns:
-        axis_0, axis_1, axis_2, type, notes, column
+        axis-0, axis-1, axis-2, type, notes, column
 
     Returns:
         raw_markers:   List[timepoint] of List[(label, (x,y,z))]
-        raw_fiducials: List[timepoint] of List[(label, (x,y,z))] where type == fiducial_type
+        raw_fiducials: List[timepoint] of List[(label, (x,y,z))] where type == "Landmark"
     """
     fiducial_type = "Landmark"
+
     if not isinstance(marker_files, (list, tuple)):
         marker_files = [marker_files]
 
     raw_markers: List[List[Tuple[str, Tuple[float, float, float]]]] = []
     raw_fiducials: List[List[Tuple[str, Tuple[float, float, float]]]] = []
 
-    for tp_idx, fp in enumerate(marker_files):
+    def _parse_csv(fp):
         df = _read_any_csv(fp)
 
         required = ["axis-0", "axis-1", "axis-2", "type"]
@@ -261,7 +264,7 @@ def read_markers_csv_list(
             mtype = str(mtype).strip()
 
             try:
-                z = float(row["axis-0"]) *0.25
+                z = float(row["axis-0"]) * 0.25
                 y = float(row["axis-1"])
                 x = float(row["axis-2"])
             except (TypeError, ValueError):
@@ -274,6 +277,34 @@ def read_markers_csv_list(
             else:
                 tp_markers.append(item)
 
+        return tp_markers, tp_fids
+
+    for tp_idx, item in enumerate(marker_files):
+        if isinstance(item, dict):
+            marker_fp = item["markers"]
+            landmark_fp = item.get("landmarks", None)
+        else:
+            marker_fp = item
+            landmark_fp = None
+
+        tp_markers, tp_fids = _parse_csv(marker_fp)
+
+        if landmark_fp is not None and Path(landmark_fp).exists():
+            lm_markers, lm_fids = _parse_csv(landmark_fp)
+
+            if lm_markers:
+                print(
+                    f"[warning] Timepoint {tp_idx+1}: landmark file {Path(landmark_fp).name} "
+                    f"contains {len(lm_markers)} non-Landmark rows; ignoring them."
+                )
+
+            tp_fids.extend(lm_fids)
+
+            print(
+                f"[napari landmarks] Timepoint {tp_idx+1}: "
+                f"added {len(lm_fids)} landmarks from {Path(landmark_fp).name}"
+            )
+
         raw_markers.append(tp_markers)
         raw_fiducials.append(tp_fids)
 
@@ -283,7 +314,6 @@ def read_markers_csv_list(
         )
 
     return raw_markers, raw_fiducials
-
 
 # def read_fiducials_csv(fiducial_filename: str, number_of_timepoints = 6, num_channels: int = 4):
 #     """
