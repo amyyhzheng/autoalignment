@@ -207,6 +207,11 @@ matches = pd.DataFrame(
         "nearest10x_z": nearest_nodes[:, 2],
         "euclid_dist_to_graph_node": nearest_dists,
         "dendritic_dist_to_center": dist_to_center,
+        "bouton_overlap_fracr2": (
+            extra_df["bouton_overlap_fracr2"].values
+            if "type" in extra_df.columns
+            else np.array([None] * len(extra_xyz_arr))
+        ),
     }
 )
 
