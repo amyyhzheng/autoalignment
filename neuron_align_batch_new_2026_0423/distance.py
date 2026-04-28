@@ -193,8 +193,8 @@ dist_to_center = np.array(dist_to_center, dtype=float)
 
 matches = pd.DataFrame(
     {
-        "extra_i": np.arange(len(extra_xyz_arr)),
-        "extra_type": (
+        "label": np.arange(len(extra_xyz_arr)),
+        "type": (
             extra_df["type"].values
             if "type" in extra_df.columns
             else np.array([None] * len(extra_xyz_arr))
