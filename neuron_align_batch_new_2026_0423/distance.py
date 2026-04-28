@@ -193,7 +193,9 @@ dist_to_center = np.array(dist_to_center, dtype=float)
 
 matches = pd.DataFrame(
     {
-        "label": np.arange(len(extra_xyz_arr)),
+        "label": extra_df["label"].values
+            if "label" in extra_df.columns
+            else np.array([None] * len(extra_xyz_arr)),
         "type": (
             extra_df["type"].values
             if "type" in extra_df.columns
@@ -207,11 +209,11 @@ matches = pd.DataFrame(
         "nearest10x_z": nearest_nodes[:, 2],
         "euclid_dist_to_graph_node": nearest_dists,
         "dendritic_dist_to_center": dist_to_center,
-        "bouton_overlap_fracr2": (
-            extra_df["bouton_overlap_fracr2"].values
-            if "type" in extra_df.columns
-            else np.array([None] * len(extra_xyz_arr))
-        ),
+        # "bouton_overlap_fracr2": (
+        #     extra_df["bouton_overlap_fracr2"].values
+        #     if "type" in extra_df.columns
+        #     else np.array([None] * len(extra_xyz_arr))
+        # ),
     }
 )
 
