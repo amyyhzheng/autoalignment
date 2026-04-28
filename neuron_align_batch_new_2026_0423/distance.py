@@ -199,9 +199,9 @@ matches = pd.DataFrame(
             if "type" in extra_df.columns
             else np.array([None] * len(extra_xyz_arr))
         ),
-        "extra_x": extra_xyz_arr[:, 0],
-        "extra_y": extra_xyz_arr[:, 1],
-        "extra_z": extra_xyz_arr[:, 2],
+        "axis-2": extra_xyz_arr[:, 0],#x
+        "axis-1": extra_xyz_arr[:, 1], #y
+        "axis-0": extra_xyz_arr[:, 2], #z
         "nearest10x_x": nearest_nodes[:, 0],
         "nearest10x_y": nearest_nodes[:, 1],
         "nearest10x_z": nearest_nodes[:, 2],
