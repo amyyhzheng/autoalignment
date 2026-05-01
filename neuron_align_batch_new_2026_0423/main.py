@@ -343,7 +343,7 @@ def run_one_branch(parent_dir: Path, branch_dir: Path, output_root: Path) -> Non
 
 def main():
     parent_dir = Path(
-       r'Z:\Joe\2p_data\SOM\ThirdRound\SOM055_DOB051322_TT\Analysis_withAmyCode_cell4\CopyForAnalysis'
+       '/Volumes/nedividata/Amy/files_for_amy_fromJoe/SOM055_cell4'
     ).expanduser().resolve()
 
     puncta_root = parent_dir / "PunctaScoring"
