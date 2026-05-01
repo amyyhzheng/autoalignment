@@ -67,65 +67,83 @@ from computation import ComputationResult
 #         spine.append(spine_tp_dedup)
 
 #     return shaft, spine
-
 def separate_shaft_spine(settings: Settings, result: ComputationResult, eps: float = 1e-6):
     """
     Return per-timepoint lists of shaft markers and spine markers.
-    Each marker keeps its original type and distance.
-    If duplicate distances occur within a TP, de-duplicate by distance
-    while preserving the first matching marker entry.
+    Each marker keeps its original type, distance, side, timepoint, and point index.
+    If duplicate distances occur within a TP, de-duplicate by shifting distance.
     """
 
     def dedupe_markers(marker_list, used=None, eps=1e-6, delta=1e-3):
         if used is None:
             used = []
-
         for m in marker_list:
             d = m["distance"]
 
-            # Keep shifting until it's unique
             while any(abs(d - u) <= eps for u in used):
-                print('had to dedupe marker with distance', d, 'by shifting it by delta', delta)
+                print(
+                    "had to dedupe marker with distance",
+                    d,
+                    "by shifting it by delta",
+                    delta,
+                )
                 d += delta
 
             m["distance"] = d
             used.append(d)
-
         return marker_list, used
-    
 
     shaft, spine = [], []
 
-    for tp_idx, (types, dists) in enumerate(zip(result.raw_marker_types_only, result.final_marker_distance)):
+    for tp_idx, (types, dists) in enumerate(
+        zip(result.raw_marker_types_only, result.final_marker_distance)
+    ):
         zp = list(zip(types, dists))
-        #changed to include oriignal point index for better debugging and potential future use, but still de-dupe by distance
 
         shaft_tp = [
-            {"type": t, "distance": d, "tp": tp_idx, "point_idx": point_idx}
+            {
+                "type": t,
+                "distance": d,
+                "tp": tp_idx,
+                "point_idx": point_idx,
+                "side": result.marker_sides[tp_idx][point_idx],
+            }
             for point_idx, (t, d) in enumerate(zp)
             if str(t).lower() == settings.inhibitory_shaft.lower()
         ]
+
         spine_tp = [
-            {"type": t, "distance": d, "tp": tp_idx, "point_idx": point_idx}
+            {
+                "type": t,
+                "distance": d,
+                "tp": tp_idx,
+                "point_idx": point_idx,
+                "side": result.marker_sides[tp_idx][point_idx],
+            }
             for point_idx, (t, d) in enumerate(zp)
             if str(t).lower() == settings.inhibitory_spine.lower()
         ]
 
-        print(f"Timepoint {tp_idx}: shaft distances: {[m['distance'] for m in shaft_tp]}, spine distances: {[m['distance'] for m in spine_tp]}")
         print(
-            f"Timepoint {tp_idx}: shaft types: {[m['type'] for m in shaft_tp]}, "
-            f"spine types: {[m['type'] for m in spine_tp]}"
+            f"Timepoint {tp_idx}: "
+            f"shaft distances: {[m['distance'] for m in shaft_tp]}, "
+            f"spine distances: {[m['distance'] for m in spine_tp]}"
+        )
+        print(
+            f"Timepoint {tp_idx}: "
+            f"shaft sides: {[m['side'] for m in shaft_tp]}, "
+            f"spine sides: {[m['side'] for m in spine_tp]}"
         )
 
         used = []
         delta = 1e-3
-        shaft_tp_dedup, used = dedupe_markers(shaft_tp, used=used, eps=eps, delta=delta)
-        spine_tp_dedup, used = dedupe_markers(spine_tp, used=used, eps=eps, delta=delta)
 
-        if len(shaft_tp_dedup) != len(shaft_tp):
-            print(f"[separate_shaft_spine] WARNING tp={tp_idx}: deduped shaft distances {len(shaft_tp)} -> {len(shaft_tp_dedup)} (eps={eps})")
-        if len(spine_tp_dedup) != len(spine_tp):
-            print(f"[separate_shaft_spine] WARNING tp={tp_idx}: deduped spine distances {len(spine_tp)} -> {len(spine_tp_dedup)} (eps={eps})")
+        shaft_tp_dedup, used = dedupe_markers(
+            shaft_tp, used=used, eps=eps, delta=delta
+        )
+        spine_tp_dedup, used = dedupe_markers(
+            spine_tp, used=used, eps=eps, delta=delta
+        )
 
         shaft.append(shaft_tp_dedup)
         spine.append(spine_tp_dedup)
@@ -135,19 +153,97 @@ def separate_shaft_spine(settings: Settings, result: ComputationResult, eps: flo
 
 # def _closest_centroid_idx(x, centroids):
 #     return int(np.argmin([abs(c - x) for c in centroids]))
-def _closest_valid_centroid_idx(pos, tp, current, cmap):
+# def _closest_valid_centroid_idx(pos, tp, current, cmap, marker_type=None, marker_side = None):
+#     ranked = sorted(
+#         range(len(current)),
+#         key=lambda ci: abs(current[ci] - pos)
+#     )
+#     is_spine = str(marker_type).lower().startswith("spine")
+    
+#     for ci in ranked:
+#         tuples = cmap.get(ci, [])
+#         used_tps = {t for _, _, t, _ in tuples}
+#         if tp not in used_tps:
+#             return ci
+
+#     return None
+
+# def _closest_valid_centroid_idx(
+#     pos, tp, current, cmap,
+#     marker_type=None,
+#     side=None,
+#     cluster_sides=None,
+# ):
+#     ranked = sorted(
+#         range(len(current)),
+#         key=lambda ci: abs(current[ci] - pos)
+#     )
+
+#     is_spine = str(marker_type).lower().startswith("spine")
+
+#     for ci in ranked:
+#         tuples = cmap.get(ci, [])
+
+#         # Rule 1: cluster cannot already contain this timepoint
+#         used_tps = {t for _, _, t, _ in tuples}
+#         if tp in used_tps:
+#             continue
+
+#         # Rule 2: spine markers must match cluster side
+#         if is_spine and side is not None and cluster_sides is not None:
+#             existing_side = cluster_sides.get(ci)
+
+#             if existing_side is not None and existing_side != side:
+#                 continue
+
+#         return ci
+
+#     return None
+def _closest_valid_centroid_idx(
+    pos,
+    tp,
+    current,
+    cmap,
+    marker_type=None,
+    side=None,
+    cluster_sides=None,
+):
+    """
+    Return the index of the closest valid centroid.
+
+    Valid means:
+    1) Cluster does not already contain a marker from this timepoint
+    2) If marker is a spine, it must match the cluster's side (left/right)
+    """
+
+    # sort centroids by distance to this marker
     ranked = sorted(
         range(len(current)),
         key=lambda ci: abs(current[ci] - pos)
     )
 
+    is_spine = str(marker_type).lower().startswith("spine")
+
     for ci in ranked:
         tuples = cmap.get(ci, [])
-        used_tps = {t for _, _, t, _ in tuples}
-        if tp not in used_tps:
-            return ci
 
+        # --- Rule 1: only one marker per timepoint ---
+        used_tps = {t for _, _, t, _ in tuples}
+        if tp in used_tps:
+            continue
+
+        # --- Rule 2: spine must match side ---
+        if is_spine and side is not None and cluster_sides is not None:
+            existing_side = cluster_sides.get(ci)
+
+            # if cluster already has a side, enforce match
+            if existing_side is not None and existing_side != side:
+                continue
+        return ci
+
+    # no valid centroid found caller will create a new cluster
     return None
+
 def _closest_centroid_idx(x, centroids):
     return int(np.argmin([abs(c - x) for c in centroids]))
 
@@ -189,13 +285,24 @@ def _kmeans_once(centroids, distance_data, final_marker_distance):
     #     return cmap, current
     def assign(current):
         cmap = {}
+        cluster_sides = {}
 
         for tp, tp_list in enumerate(distance_data):
             for marker in tp_list:
                 pos = marker["distance"]
                 point_idx = marker["point_idx"]
+                marker_type = marker["type"]
+                marker_side = marker.get("side")
 
-                ci = _closest_valid_centroid_idx(pos, tp, current, cmap)
+                ci = _closest_valid_centroid_idx(
+                    pos,
+                    tp,
+                    current,
+                    cmap,
+                    marker_type=marker_type,
+                    side=marker_side,
+                    cluster_sides=cluster_sides,
+                )
 
                 if ci is None:
                     ci = len(current)
@@ -206,6 +313,9 @@ def _kmeans_once(centroids, distance_data, final_marker_distance):
                     cmap[ci] = []
 
                 cmap[ci].append((ci, pos, tp, point_idx))
+
+                if str(marker_type).lower().startswith("spine") and marker_side is not None:
+                    cluster_sides.setdefault(ci, marker_side)
 
         return cmap, current
 
@@ -227,7 +337,7 @@ def _kmeans_once(centroids, distance_data, final_marker_distance):
     return current, cmap
 
 
-def _split_if_needed(centroids, cmap, max_spread=3.0):
+def _split_if_needed(centroids, cmap, max_spread=7.0):
     # Enforce: at most one point per timepoint per cluster; and cluster spread ≤ max_spread µm
     # if violated, split out the worst offender as new centroid
     for cid, tuples in list(cmap.items()):
