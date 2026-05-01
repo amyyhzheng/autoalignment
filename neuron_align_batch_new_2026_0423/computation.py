@@ -203,6 +203,41 @@ def extract_branch_bounds(raw_markers):
         })
 
     return bounds
+
+def marker_side_of_branch(marker, branch, closest_idx, eps=1e-9):
+    """
+    Return whether marker is on the left or right side of the tracing spline
+    Check whether it is on the spline 
+
+    """
+    n = len(branch)
+
+    if closest_idx <= 0:
+        p_prev = np.array(branch[closest_idx][:2], dtype=float)
+        p_next = np.array(branch[closest_idx + 1][:2], dtype=float)
+    elif closest_idx >= n - 1:
+        p_prev = np.array(branch[closest_idx - 1][:2], dtype=float)
+        p_next = np.array(branch[closest_idx][:2], dtype=float)
+    else:
+        p_prev = np.array(branch[closest_idx - 1][:2], dtype=float)
+        p_next = np.array(branch[closest_idx + 1][:2], dtype=float)
+
+    tangent = p_next - p_prev
+    branch_pt = np.array(branch[closest_idx][:2], dtype=float)
+    marker_xy = np.array(marker[:2], dtype=float)
+
+    vec_to_marker = marker_xy - branch_pt
+
+    cross = tangent[0] * vec_to_marker[1] - tangent[1] * vec_to_marker[0]
+
+    if abs(cross) <= eps:
+        return "on_spline"
+    elif cross > 0:
+        return "left"
+    else:
+        return "right"
+    
+
 def nearest_index(point, branch):
     dists = [euc_xy(point, q) for q in branch]
     return int(np.argmin(dists))
@@ -555,6 +590,7 @@ class ComputationResult:
     final_marker_distance: List[List[float]]
     raw_marker_coords_only: List[List[Coord]]
     raw_marker_types_only: List[List[str]]
+    marker_sides: List[List[str]]
 
 
 def _normalize_and_scale(branch, markers, fiducials, scale):
@@ -684,6 +720,20 @@ def compute(settings: Settings) -> ComputationResult:
     cb_markers: List[List[int]] = []
     for i in range(settings.n_timepoints):
         cb_markers.append(nearest_indices(nm[i], nb[i]))
+        
+    marker_sides: List[List[str]] = []
+
+    for tp in range(settings.n_timepoints):
+        sides_tp = []
+        for marker_coord, closest_idx in zip(nm[tp], cb_markers[tp]):
+            side = marker_side_of_branch(
+                marker_coord,
+                nb[tp],
+                closest_idx
+            )
+            sides_tp.append(side)
+
+        marker_sides.append(sides_tp)
 
     # --------------------------------------------------------
     # 6. Landmark strategy:
@@ -955,6 +1005,7 @@ def compute(settings: Settings) -> ComputationResult:
         final_marker_distance=final_marker_distance,
         raw_marker_coords_only=raw_marker_coords_only,
         raw_marker_types_only=raw_marker_types_only,
+        marker_sides=marker_sides,
     )
 
 def plot_branch_with_marker_ids(
