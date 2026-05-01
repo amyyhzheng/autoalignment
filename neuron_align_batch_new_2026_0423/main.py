@@ -188,7 +188,7 @@ def run_one_branch(parent_dir: Path, branch_dir: Path, output_root: Path) -> Non
                 scaling_factor=[1, 1, 1],
                 num_channels=4,
                 inhibitory_shaft="Shaft_SyntdNotScored",
-                inhibitory_spine="Spine_SyntdNotScored",
+                inhibitory_spine="Spine_SynTdNotScored",
                 ojj_tif_key="Image",
                 snt_branch_fmt="branch%s",
             )
@@ -201,8 +201,8 @@ def run_one_branch(parent_dir: Path, branch_dir: Path, output_root: Path) -> Non
 
             next_cluster_id = 0
 
-            # ---- SHAFT ----
             if any(shaft_markers):
+                #shaft_markers contains what? list of lists of (type, (x,y,z)) for each timepoint. we want to cluster these separately for shaft vs spine, then export a csv mapping each marker to a cluster ID, with cluster IDs for shaft vs spine in separate namespaces (e.g., shaft clusters are 1-10, spine clusters are 11-20)  
                 shaft_grouping = choose_best_clustering(shaft_markers, res.final_marker_distance)
                 if shaft_grouping:
                     shaft_clusters = export_grouping_csv(
@@ -214,7 +214,6 @@ def run_one_branch(parent_dir: Path, branch_dir: Path, output_root: Path) -> Non
                     )
                     next_cluster_id += len(shaft_clusters)
 
-            # ---- SPINE ----
             if any(spine_markers):
                 spine_grouping = choose_best_clustering(spine_markers, res.final_marker_distance)
                 if spine_grouping:
@@ -226,10 +225,6 @@ def run_one_branch(parent_dir: Path, branch_dir: Path, output_root: Path) -> Non
                         metadata_out=str(run_out / "inhibitory_spine_grouping_metadata.csv"),
                     )
                     next_cluster_id += len(spine_clusters)
-
-            # ---------------------------
-            # plots -> save to disk
-            # ---------------------------
             def export_markers_for_branch_plot(res, cluster_list, out_csv):
                 import pandas as pd
 
@@ -343,11 +338,11 @@ def run_one_branch(parent_dir: Path, branch_dir: Path, output_root: Path) -> Non
 
 def main():
     parent_dir = Path(
-       r'Z:\Joe\2p_data\SOM\ThirdRound\SOM055_DOB051322_TT\Analysis_withAmyCode_cell4\CopyForAnalysis'
+       '/Volumes/nedividata/Amy/files_for_amy_fromJoe/SOM055_cell5_2026_0421'
     ).expanduser().resolve()
 
     puncta_root = parent_dir / "PunctaScoring"
-    output_root = parent_dir / "Branch1_test_manual"
+    output_root = parent_dir / "AutoalignmentOutputstestinglandmark_afterpenalty"
 
     branch_dirs = sorted([p for p in puncta_root.glob("branch*") if p.is_dir()])
     if not branch_dirs:
