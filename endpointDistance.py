@@ -14,12 +14,12 @@ BASE_DIR = Path(
 TRACE_CSV = BASE_DIR / "SNTTrace/Full_Cell_SNT/SOM055_Image2_FullTrace_xyzCoordinates.csv"
 
 TOPOLOGY_CSV = '/Volumes/nedividata/Joe/2p_data/SOM/ThirdRound/SOM055_DOB051322_TT/Analysis_withAmyCode_cell5/SNTTrace/Full_Cell_SNT/SOM055_Image2_SNT_BranchInfo.csv'
-AFTER_MANUAL_EDITS_DIR = BASE_DIR / "Alignment_and_checking/AfterManualEdits"
+AFTER_MANUAL_EDITS_DIR = BASE_DIR / "AlignmentAndChecking/AfterManualEdits"
 
 OUT_DIR = Path("/Users/amyzheng/Desktop/testingdistance")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-BRANCH_IDS = [1, 2, 3, 4, 5]
+BRANCH_IDS = [1, 2, 3, 4]
 
 REFERENCE_POINT_FOR_CENTER = (
     382 / 4,
@@ -232,7 +232,7 @@ def make_matches_for_branch(
 ):
     extra_points_csv = (
         AFTER_MANUAL_EDITS_DIR
-        / f"checked_Branch{branch_id}"
+        / f"Corrected_Branch{branch_id}"
         / f"Image2_branch{branch_id}_snapped_bouton_overlap_with_empty.csv"
     )
 
