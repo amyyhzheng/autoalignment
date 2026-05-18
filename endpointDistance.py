@@ -151,7 +151,7 @@ def build_dendrite_tree_from_xyz_df(
 
         for node in closest_terminal_nodes:
             dist = float(np.linalg.norm(np.asarray(node) - np.asarray(center)))
-            G.add_edge(node, center, weight=dist)
+            G.add_edge(node, center, weight=0) #changed the distance to 0 
 
     return G, center
 
