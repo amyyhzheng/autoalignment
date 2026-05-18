@@ -13,9 +13,10 @@ BASE_DIR = Path(
 
 TRACE_CSV = BASE_DIR / "SNTTrace/Full_Cell_SNT/SOM055_Image2_FullTrace_xyzCoordinates.csv"
 
+TOPOLOGY_CSV = '/Volumes/nedividata/Joe/2p_data/SOM/ThirdRound/SOM055_DOB051322_TT/Analysis_withAmyCode_cell5/SNTTrace/Full_Cell_SNT/SOM055_Image2_SNT_BranchInfo.csv'
 AFTER_MANUAL_EDITS_DIR = BASE_DIR / "Alignment_and_checking/AfterManualEdits"
 
-OUT_DIR = Path('/Users/amyzheng/Desktop/testingdistance')
+OUT_DIR = Path("/Users/amyzheng/Desktop/testingdistance")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 BRANCH_IDS = [1, 2, 3, 4, 5]
@@ -54,6 +55,7 @@ def load_napari_points_df(csv_path: str | Path) -> pd.DataFrame:
 
     raise ValueError(f"Unrecognized napari CSV columns: {list(df.columns)}")
 
+
 def get_branch_run_endpoints_from_trace(
     full_trace_df: pd.DataFrame,
     branch_id: int,
@@ -64,10 +66,8 @@ def get_branch_run_endpoints_from_trace(
         raise ValueError(f"Branch column '{branch_col}' not found in trace CSV.")
 
     df = full_trace_df.copy()
-
     target_branch_name = f"branch{branch_id}"
 
-    # only real branch rows
     df = df[df[branch_col].astype(str).str.lower() == target_branch_name.lower()].copy()
 
     if df.empty:
@@ -80,7 +80,6 @@ def get_branch_run_endpoints_from_trace(
     start = df.iloc[0].loc[list(coord_cols)].to_numpy(dtype=float)
     end = df.iloc[-1].loc[list(coord_cols)].to_numpy(dtype=float)
 
-    # match graph scaling: x/y scaled, z unchanged
     start[0] *= 0.25
     start[1] *= 0.25
 
@@ -89,8 +88,10 @@ def get_branch_run_endpoints_from_trace(
 
     return tuple(start), tuple(end)
 
+
 def build_dendrite_tree_from_xyz_df(
     full_trace_df: pd.DataFrame,
+    topology_df: pd.DataFrame,
     branch_col: str = "path",
     coord_cols=("x", "y", "z"),
     max_edge_length=5.0,
@@ -99,11 +100,12 @@ def build_dendrite_tree_from_xyz_df(
     G = nx.Graph()
 
     if branch_col in full_trace_df.columns:
-        groups = full_trace_df.groupby(branch_col)
+        groups = full_trace_df.groupby(branch_col, sort=False)
     else:
         groups = [(0, full_trace_df)]
 
-    for _, group in groups:
+    for path_name, group in groups:
+        group = group.reset_index(drop=True)
         coords = group.loc[:, coord_cols].dropna().to_numpy(dtype=float)
 
         coords[:, 0] *= 0.25
@@ -112,58 +114,99 @@ def build_dendrite_tree_from_xyz_df(
         if len(coords) < 2:
             continue
 
-        for i in range(len(coords) - 1):
-            p1 = tuple(coords[i])
-            p2 = tuple(coords[i + 1])
+        node_ids = []
 
-            if p1 == p2:
-                continue
+        for i, xyz in enumerate(coords):
+            node_id = (str(path_name), i)
+            node_ids.append(node_id)
 
-            dist = float(np.linalg.norm(coords[i] - coords[i + 1]))
+            G.add_node(
+                node_id,
+                xyz=tuple(xyz),
+                path_name=str(path_name),
+                index=i,
+            )
+
+        for i in range(len(node_ids) - 1):
+            n1 = node_ids[i]
+            n2 = node_ids[i + 1]
+
+            xyz1 = np.array(G.nodes[n1]["xyz"], dtype=float)
+            xyz2 = np.array(G.nodes[n2]["xyz"], dtype=float)
+
+            dist = float(np.linalg.norm(xyz1 - xyz2))
 
             if dist < max_edge_length:
-                G.add_edge(p1, p2, weight=dist)
+                G.add_edge(n1, n2, weight=dist)
 
-    center = tuple(reference_point) if reference_point is not None else None
+    node_ids = list(G.nodes)
+    node_coords = np.array([G.nodes[n]["xyz"] for n in node_ids], dtype=float)
+    tree = cKDTree(node_coords)
 
-    if center is not None and len(G) > 0:
-        reference_point = np.asarray(reference_point, dtype=float)
-        components = list(nx.connected_components(G))
-        closest_terminal_nodes = []
+    for _, row in topology_df.iterrows():
+        if pd.isna(row["ChildPathIDs"]):
+            continue
 
-        for comp in components:
-            terminal_nodes = [node for node in comp if G.degree[node] == 1]
+        parent_end_xyz = np.array(
+            [
+                float(row["EndX"]) * 0.25,
+                float(row["EndY"]) * 0.25,
+                float(row["EndZ"]),
+            ],
+            dtype=float,
+        )
 
-            if not terminal_nodes:
+        _, parent_idx = tree.query(parent_end_xyz)
+        parent_node = node_ids[parent_idx]
+
+        child_ids = [
+            int(x.strip())
+            for x in str(row["ChildPathIDs"]).split(",")
+            if x.strip()
+        ]
+
+        for child_id in child_ids:
+            child_rows = topology_df.loc[
+                topology_df["PathID"].astype(int) == child_id
+            ]
+
+            if child_rows.empty:
                 continue
 
-            terminal_coords = np.array(terminal_nodes, dtype=float)
-            dists = np.linalg.norm(
-                terminal_coords - reference_point[None, :],
-                axis=1,
+            child_row = child_rows.iloc[0]
+
+            child_start_xyz = np.array(
+                [
+                    float(child_row["StartX"]) * 0.25,
+                    float(child_row["StartY"]) * 0.25,
+                    float(child_row["StartZ"]),
+                ],
+                dtype=float,
             )
 
-            closest_terminal_nodes.append(
-                terminal_nodes[int(np.argmin(dists))]
-            )
+            _, child_idx = tree.query(child_start_xyz)
+            child_node = node_ids[child_idx]
 
-        G.add_node(center)
+            xyz1 = np.array(G.nodes[parent_node]["xyz"], dtype=float)
+            xyz2 = np.array(G.nodes[child_node]["xyz"], dtype=float)
 
-        for node in closest_terminal_nodes:
-            dist = float(np.linalg.norm(np.asarray(node) - np.asarray(center)))
-            G.add_edge(node, center, weight=0) #changed the distance to 0 
+            dist = float(np.linalg.norm(xyz1 - xyz2))
+
+            G.add_edge(parent_node, child_node, weight=dist)
+
+    center = tuple(reference_point) if reference_point is not None else None
 
     return G, center
 
 
-def find_nearest_node(coord_xyz, kdtree, node_coords):
+def find_nearest_node(coord_xyz, kdtree, node_ids, node_coords):
     dist, idx = kdtree.query(np.asarray(coord_xyz, dtype=float))
-    return tuple(node_coords[idx]), float(dist)
+    return node_ids[idx], float(dist)
 
 
-def graph_distance_between_xyz(coord_xyz, target_xyz, G, kdtree, node_coords):
-    source_node, _ = find_nearest_node(coord_xyz, kdtree, node_coords)
-    target_node, _ = find_nearest_node(target_xyz, kdtree, node_coords)
+def graph_distance_between_xyz(coord_xyz, target_xyz, G, kdtree, node_ids, node_coords):
+    source_node, _ = find_nearest_node(coord_xyz, kdtree, node_ids, node_coords)
+    target_node, _ = find_nearest_node(target_xyz, kdtree, node_ids, node_coords)
 
     try:
         dist = nx.shortest_path_length(
@@ -183,6 +226,7 @@ def make_matches_for_branch(
     G10x,
     center10x,
     kdtree,
+    node_ids,
     node_coords,
     df_ref,
 ):
@@ -214,16 +258,18 @@ def make_matches_for_branch(
         coord_cols=("x", "y", "z"),
     )
 
-    nearest_nodes = []
+    nearest_node_ids = []
+    nearest_node_coords = []
     nearest_dists = []
     dist_to_center = []
     dist_to_branch_start = []
     dist_to_branch_end = []
 
     for p in extra_xyz_arr:
-        nn, d = find_nearest_node(p, kdtree, node_coords)
+        nn, d = find_nearest_node(p, kdtree, node_ids, node_coords)
 
-        nearest_nodes.append(nn)
+        nearest_node_ids.append(nn)
+        nearest_node_coords.append(G10x.nodes[nn]["xyz"])
         nearest_dists.append(d)
 
         dist_to_center.append(
@@ -232,6 +278,7 @@ def make_matches_for_branch(
                 center10x,
                 G10x,
                 kdtree,
+                node_ids,
                 node_coords,
             )
         )
@@ -242,6 +289,7 @@ def make_matches_for_branch(
                 branch_start_xyz,
                 G10x,
                 kdtree,
+                node_ids,
                 node_coords,
             )
         )
@@ -252,11 +300,12 @@ def make_matches_for_branch(
                 branch_end_xyz,
                 G10x,
                 kdtree,
+                node_ids,
                 node_coords,
             )
         )
 
-    nearest_nodes = np.array(nearest_nodes, dtype=float)
+    nearest_node_coords = np.array(nearest_node_coords, dtype=float)
     nearest_dists = np.array(nearest_dists, dtype=float)
     dist_to_center = np.array(dist_to_center, dtype=float)
     dist_to_branch_start = np.array(dist_to_branch_start, dtype=float)
@@ -274,9 +323,10 @@ def make_matches_for_branch(
             "axis-2": extra_xyz_arr[:, 0],
             "axis-1": extra_xyz_arr[:, 1],
             "axis-0": extra_xyz_arr[:, 2],
-            "nearest10x_x": nearest_nodes[:, 0],
-            "nearest10x_y": nearest_nodes[:, 1],
-            "nearest10x_z": nearest_nodes[:, 2],
+            "nearest_node_id": [str(x) for x in nearest_node_ids],
+            "nearest10x_x": nearest_node_coords[:, 0],
+            "nearest10x_y": nearest_node_coords[:, 1],
+            "nearest10x_z": nearest_node_coords[:, 2],
             "euclid_dist_to_graph_node": nearest_dists,
             "dendritic_dist_to_center": dist_to_center,
             "dendritic_dist_to_branch_start": dist_to_branch_start,
@@ -300,11 +350,11 @@ def make_matches_for_branch(
     print(matches.head(10))
     print(f"Saved: {out_csv}")
 
-    return matches, extra_xyz_arr, nearest_nodes, node_coords
+    return matches, extra_xyz_arr, nearest_node_coords, node_coords
 
 
-def show_napari_view(extra_xyz_arr, nearest_nodes, node_coords, center10x):
-    assigned_nodes_xyz = np.unique(nearest_nodes, axis=0)
+def show_napari_view(extra_xyz_arr, nearest_node_coords, node_coords, center10x):
+    assigned_nodes_xyz = np.unique(nearest_node_coords, axis=0)
     assigned_set = set(map(tuple, assigned_nodes_xyz))
     all_nodes_set = set(map(tuple, node_coords))
 
@@ -313,7 +363,7 @@ def show_napari_view(extra_xyz_arr, nearest_nodes, node_coords, center10x):
         dtype=float,
     )
 
-    counts = Counter(map(tuple, nearest_nodes))
+    counts = Counter(map(tuple, nearest_node_coords))
     assigned_sizes = np.array(
         [counts[tuple(n)] for n in assigned_nodes_xyz],
         dtype=float,
@@ -331,7 +381,7 @@ def show_napari_view(extra_xyz_arr, nearest_nodes, node_coords, center10x):
 
     viewer.add_points(
         np.array(center10x, dtype=float)[None, [2, 1, 0]],
-        name="center_node",
+        name="center_reference_only",
         size=12,
         face_color=[0.0, 1.0, 1.0],
         opacity=1.0,
@@ -363,7 +413,7 @@ def show_napari_view(extra_xyz_arr, nearest_nodes, node_coords, center10x):
     )
 
     extra_zyx = extra_xyz_arr[:, [2, 1, 0]]
-    nearest_zyx = nearest_nodes[:, [2, 1, 0]]
+    nearest_zyx = nearest_node_coords[:, [2, 1, 0]]
 
     vecs = np.zeros((len(extra_zyx), 2, 3), dtype=float)
     vecs[:, 0, :] = extra_zyx
@@ -381,9 +431,11 @@ def show_napari_view(extra_xyz_arr, nearest_nodes, node_coords, center10x):
 
 def main():
     df_ref = pd.read_csv(TRACE_CSV)
+    topology_df = pd.read_csv(TOPOLOGY_CSV)
 
     G10x, center10x = build_dendrite_tree_from_xyz_df(
-        df_ref,
+        full_trace_df=df_ref,
+        topology_df=topology_df,
         branch_col="path" if "path" in df_ref.columns else "__no_path__",
         coord_cols=("x", "y", "z"),
         max_edge_length=MAX_EDGE_LENGTH,
@@ -391,9 +443,13 @@ def main():
     )
 
     if center10x is None:
-        raise RuntimeError("center10x is None. Check reference point or trace graph.")
+        raise RuntimeError("center10x is None. Check reference point.")
 
-    node_coords = np.array(list(G10x.nodes), dtype=float)
+    node_ids = list(G10x.nodes)
+    node_coords = np.array(
+        [G10x.nodes[n]["xyz"] for n in node_ids],
+        dtype=float,
+    )
     kdtree = cKDTree(node_coords)
 
     last_for_view = None
@@ -404,6 +460,7 @@ def main():
             G10x=G10x,
             center10x=center10x,
             kdtree=kdtree,
+            node_ids=node_ids,
             node_coords=node_coords,
             df_ref=df_ref,
         )
@@ -412,8 +469,8 @@ def main():
             last_for_view = result
 
     if SHOW_NAPARI and last_for_view is not None:
-        _, extra_xyz_arr, nearest_nodes, node_coords = last_for_view
-        show_napari_view(extra_xyz_arr, nearest_nodes, node_coords, center10x)
+        _, extra_xyz_arr, nearest_node_coords, node_coords = last_for_view
+        show_napari_view(extra_xyz_arr, nearest_node_coords, node_coords, center10x)
 
 
 if __name__ == "__main__":
